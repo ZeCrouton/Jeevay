@@ -27,7 +27,7 @@ T.providers.poi = (() => {
   // Requête courte en GET par portion de ~25 km (zone rectangulaire), puis filtrage précis côté appareil.
   // Plus fiable que de longues requêtes POST : moins de charge pour le serveur, pas de délai dépassé.
   function chunks(coords) {
-    const c = T.util.cum(coords), total = c[c.length - 1] || 0, size = 25000, out = [];
+    const c = T.util.cum(coords), total = c[c.length - 1] || 0, size = 35000, out = [];
     for (let a = 0; a < total || !out.length; a += size) {
       const pts = coords.filter((_, i) => c[i] >= a - 200 && c[i] <= a + size + 200);
       if (pts.length) out.push(pts);
@@ -36,15 +36,21 @@ T.providers.poi = (() => {
     return out;
   }
 
+  const cache = new Map();
+  let preferred = 0; // dernier serveur qui a répondu : essayé en premier ensuite
+
   async function get(query, signal) {
+    if (cache.has(query)) return cache.get(query);
     let lastErr = null;
-    for (const url of T.config.poi.urls) {
+    const urls = T.config.poi.urls, order = urls.map((_, i) => (i + preferred) % urls.length);
+    for (const i of order) {
+      const url = urls[i];
       try {
-        const r = await fetch(url + '?data=' + encodeURIComponent(query), { signal });
-        if (r.ok) return await r.json();
+        const r = await T.util.fetchT(url + '?data=' + encodeURIComponent(query), { signal }, 12000);
+        if (r.ok) { const j = await r.json(); preferred = i; cache.set(query, j); return j; }
         lastErr = new Error(r.status === 429 || r.status === 504 ? 'Serveurs de points d’intérêt saturés, réessayez dans une minute' : 'Points d’intérêt indisponibles (' + r.status + ')');
       } catch (e) {
-        if (e.name === 'AbortError') throw e;
+        if (signal && signal.aborted) throw e;
         lastErr = new Error('Serveurs de points d’intérêt injoignables pour le moment, réessayez dans une minute');
       }
     }
@@ -61,7 +67,7 @@ T.providers.poi = (() => {
       let s = 90, w = 180, n = -90, e = -180;
       pts.forEach(p => { s = Math.min(s, p[1]); n = Math.max(n, p[1]); w = Math.min(w, p[0]); e = Math.max(e, p[0]); });
       const dy = maxR / 111000, dx = dy / Math.max(0.2, Math.cos((s + n) / 2 * Math.PI / 180));
-      const bb = [s - dy, w - dx, n + dy, e + dx].map(v => v.toFixed(4)).join(',');
+      const bb = [s - dy, w - dx, n + dy, e + dx].map(v => v.toFixed(3)).join(',');
       try {
         const j = await get(`[out:json][timeout:25][bbox:${bb}];(${sel});out center tags 1500;`, signal);
         for (const el of j.elements || []) {
@@ -73,11 +79,11 @@ T.providers.poi = (() => {
           out.push({ id, cat, name: label(t, cat), c: [lon, lat], tags: t });
         }
       } catch (e) {
-        if (e.name === 'AbortError') throw e;
+        if (signal && signal.aborted) throw e;
         failed++; lastErr = e;
       }
       done++;
-      if (onProgress) onProgress(done, parts.length);
+      if (onProgress) onProgress(done, parts.length, out.slice());
     };
     // Deux requêtes à la fois au maximum (règle d'usage d'Overpass)
     let next = 0;

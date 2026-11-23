@@ -5,7 +5,7 @@ window.T = window.T || {};
 
 T.config = {
   appName: 'Trajecto',
-  version: '1.0.2',
+  version: '1.0.3',
   storagePrefix: 'trajecto.',
 
   map: {
@@ -23,7 +23,7 @@ T.config = {
   // Altitudes (Open-Meteo, gratuit, sans clé)
   elevation: { url: 'https://api.open-meteo.com/v1/elevation', batch: 100 },
   // Recherche de lieux (Photon / Komoot, gratuit, sans clé)
-  geocode: { url: 'https://photon.komoot.io' },
+  geocode: { url: 'https://photon.komoot.io', fallback: 'https://nominatim.openstreetmap.org' },
 
   // Points d'intérêt (Overpass / OpenStreetMap, gratuit) : 2 serveurs, le second en secours
   poi: { urls: ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'] },

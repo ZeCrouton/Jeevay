@@ -598,19 +598,26 @@
   // ---------- Recherche ----------
   function initSearch() {
     const input = $('#q'), list = $('#q-results');
-    let ctrl = null, results = [];
+    let ctrl = null, results = [], note = '';
     const show = () => {
-      list.hidden = !results.length;
-      list.innerHTML = results.map((r, k) => `<li><button class="res" data-k="${k}"><b>${U.esc(r.label)}</b><small>${U.esc(r.sub)}</small></button>
+      list.hidden = !results.length && !note;
+      list.innerHTML = note && !results.length ? `<li class="res-note">${U.esc(note)}</li>` : results.map((r, k) => `<li><button class="res" data-k="${k}"><b>${U.esc(r.label)}</b><small>${U.esc(r.sub)}</small></button>
         <button class="icon-btn add" data-add="${k}" title="Ajouter comme point du parcours" aria-label="Ajouter comme point">${I('plus')}</button></li>`).join('');
     };
     const run = U.debounce(async () => {
       const q = input.value.trim();
-      if (q.length < 3) { results = []; show(); return; }
+      if (q.length < 3) { results = []; note = ''; show(); return; }
       if (ctrl) ctrl.abort();
-      ctrl = new AbortController();
-      try { results = await T.providers.geocode.search(q, M.center(), ctrl.signal); show(); }
-      catch (e) { if (e.name !== 'AbortError') { results = []; show(); } }
+      const my = ctrl = new AbortController();
+      note = 'Recherche…'; results = []; show();
+      try {
+        results = await T.providers.geocode.search(q, M.center(), my.signal);
+        note = results.length ? '' : 'Aucun lieu trouvé';
+      } catch (e) {
+        if (my.signal.aborted) return;
+        results = []; note = e.message || 'Recherche indisponible';
+      }
+      if (my === ctrl) show();
     }, 280);
     input.addEventListener('input', run);
     input.addEventListener('keydown', e => {
@@ -626,7 +633,7 @@
       if (b.dataset.add != null) addPoint(r.c);
       results = []; show(); input.value = r.label;
     });
-    document.addEventListener('pointerdown', e => { if (!e.target.closest('.search')) { results = []; show(); } });
+    document.addEventListener('pointerdown', e => { if (!e.target.closest('.search')) { results = []; note = ''; show(); } });
   }
 
   // ---------- Démarrage ----------

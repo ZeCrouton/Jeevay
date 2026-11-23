@@ -166,10 +166,24 @@ T.util = (() => {
     return coords.filter((_, i) => keep[i]);
   }
 
+  // fetch avec délai maximum (ms), qui respecte aussi un signal d'annulation extérieur
+  async function fetchT(url, opts = {}, ms = 10000) {
+    const c = new AbortController(), outer = opts.signal;
+    const t = setTimeout(() => c.abort(), ms);
+    const relay = () => c.abort();
+    if (outer) { if (outer.aborted) c.abort(); else outer.addEventListener('abort', relay, { once: true }); }
+    try { return await fetch(url, { ...opts, signal: c.signal }); }
+    catch (e) {
+      if (outer && outer.aborted) throw e;
+      if (e.name === 'AbortError') { const x = new Error('délai dépassé'); x.timeout = true; throw x; }
+      throw e;
+    } finally { clearTimeout(t); if (outer) outer.removeEventListener('abort', relay); }
+  }
+
   const streetViewUrl = (c, heading) =>
     `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${c[1].toFixed(6)},${c[0].toFixed(6)}` +
     (heading != null ? `&heading=${Math.round(heading)}` : '');
 
   return { dist, bearing, angleDiff, cum, lerp, search, at, headingAt, resample, nearest, decode, encode,
-    nf, fmtKm, fmtDur, esc, uid, same, debounce, clamp, streetViewUrl, destination, simplify };
+    nf, fmtKm, fmtDur, esc, uid, same, debounce, clamp, streetViewUrl, destination, simplify, fetchT };
 })();

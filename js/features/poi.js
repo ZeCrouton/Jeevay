@@ -10,40 +10,49 @@
     return saved || P.BY_MODE[mode].on;
   };
 
-  async function search() {
+  // Projette les lieux sur le parcours (position en km, écart à la route) et garde ceux assez proches
+  function project(raw, comb) {
+    const { pts } = U.resample(comb.coords, Math.max(80, comb.total / 6000));
+    const kx = Math.cos(comb.coords[0][1] * Math.PI / 180);
+    const items = [];
+    for (const it of raw) {
+      let best = Infinity, bd = 0;
+      for (const p of pts) {
+        const dx = (p.c[0] - it.c[0]) * kx, dy = p.c[1] - it.c[1], dd = dx * dx + dy * dy;
+        if (dd < best) { best = dd; bd = p.d; }
+      }
+      const off = Math.sqrt(best) * 111320;
+      if (off <= P.CATS[it.cat].radius) items.push({ ...it, d: bd, off });
+    }
+    return items;
+  }
+
+  // cats : catégories à chercher (par défaut celles qui sont cochées) ; les autres résultats déjà trouvés sont gardés
+  async function search(cats) {
     const s = T.app.st(), comb = T.analysis.combine(s);
     if (comb.coords.length < 2) { T.ui.toast('Tracez d’abord un parcours', 'error'); return; }
     if (ctrl) ctrl.abort();
-    ctrl = new AbortController();
-    const cats = P.BY_MODE[s.mode].all;
-    data = { ...data, loading: true, error: null };
+    const my = ctrl = new AbortController();
+    const sig = sigOf(s), same = data.sig === sig && data.mode === s.mode;
+    const want = Array.isArray(cats) ? cats : catsFor(s.mode);
+    const keep = same ? data.items.filter(i => !want.includes(i.cat)) : [];
+    const fetched = new Set(same ? [...(data.fetched || [])].filter(k => !want.includes(k)) : []);
+    data = { sig, mode: s.mode, items: keep, fetched, loading: true, error: null, progress: '' };
     T.app.render();
     try {
-      const res = await P.along(comb.coords, cats, ctrl.signal, (d, n) => { data = { ...data, progress: n > 1 ? `${d}/${n}` : '' }; T.app.render(); });
-      const raw = res.items;
-      // Position le long du parcours et écart à la route
-      const { pts } = U.resample(comb.coords, Math.max(80, comb.total / 6000));
-      const kx = Math.cos(comb.coords[0][1] * Math.PI / 180);
-      const seen = new Set();
-      const items = [];
-      for (const it of raw) {
-        if (seen.has(it.id)) continue;
-        seen.add(it.id);
-        let best = Infinity, bd = 0;
-        for (const p of pts) {
-          const dx = (p.c[0] - it.c[0]) * kx, dy = p.c[1] - it.c[1], dd = dx * dx + dy * dy;
-          if (dd < best) { best = dd; bd = p.d; }
-        }
-        const off = Math.sqrt(best) * 111320;
-        if (off <= P.CATS[it.cat].radius) items.push({ ...it, d: bd, off });
-      }
-      items.sort((a, b) => a.d - b.d);
-      data = { sig: sigOf(s), mode: s.mode, items, loading: false, error: null };
+      const res = await P.along(comb.coords, want, my.signal, (d, n, part) => {
+        if (my !== ctrl) return;
+        data = { ...data, items: keep.concat(project(part, comb)).sort((a, b) => a.d - b.d), progress: n > 1 ? `${d}/${n}` : '' };
+        T.app.render();
+      });
+      want.forEach(k => fetched.add(k));
+      const items = keep.concat(project(res.items, comb)).sort((a, b) => a.d - b.d);
+      data = { sig, mode: s.mode, items, fetched, loading: false, error: null };
       showAll = false;
       if (res.partial) T.ui.toast('Une partie du parcours n’a pas pu être analysée (serveur saturé) : relancez pour compléter', 'error', 6000);
       else if (!items.length) T.ui.toast('Aucun point d’intérêt trouvé le long du parcours');
     } catch (e) {
-      if (e.name === 'AbortError') return;
+      if (my.signal.aborted) return;
       data = { ...data, loading: false, error: e.message };
     }
     T.app.render();
@@ -59,6 +68,8 @@
     const s = T.app.st(), cur = new Set(catsFor(s.mode));
     if (cur.has(k)) cur.delete(k); else cur.add(k);
     T.settings.set({ poiCats: { ...T.settings.get().poiCats, [s.mode]: [...cur] } });
+    // Catégorie cochée mais pas encore cherchée sur ce parcours : on la cherche seule
+    if (cur.has(k) && data.sig && !data.loading && !(data.fetched && data.fetched.has(k))) { search([k]); return; }
     T.app.render();
   }
 
@@ -131,7 +142,7 @@
     el.innerHTML = `<div class="sec-h"><h3>Sur le parcours</h3>${btn}</div>
       ${data.error ? `<p class="err">${U.esc(data.error)}</p>` : ''}
       ${!data.sig && !data.loading ? `<p class="muted small">Stations-service, cols, points d’eau, panoramas… le long de votre tracé.</p>` : ''}
-      ${data.sig && data.mode === s.mode ? `<div class="cats">${all.map(k => `<button class="cat${on.has(k) ? ' on' : ''}" data-act="poiCat" data-k="${k}" style="--c:${P.CATS[k].color}"><i></i>${P.CATS[k].label}<b>${counts[k] || 0}</b></button>`).join('')}</div>
+      ${data.sig && data.mode === s.mode ? `<div class="cats">${all.map(k => `<button class="cat${on.has(k) ? ' on' : ''}" data-act="poiCat" data-k="${k}" style="--c:${P.CATS[k].color}"><i></i>${P.CATS[k].label}<b>${data.fetched && data.fetched.has(k) ? counts[k] || 0 : ''}</b></button>`).join('')}</div>
         ${stale ? '<p class="muted small">Le parcours a changé : mettez à jour pour recaler les distances.</p>' : ''}
         <ul class="pois">${rows.map(it => `<li><button data-act="poiGo" data-id="${it.id}"><i class="dot" style="background:${P.CATS[it.cat].color}"></i><span class="pn">${U.esc(it.name)}</span><span class="pk">km ${U.nf(it.d / 1000, 1)}</span></button></li>`).join('')}</ul>
         ${list.length > rows.length ? `<button class="mini" data-act="poiMore">Voir les ${list.length} lieux</button>` : ''}` : ''}`;
@@ -139,7 +150,7 @@
   });
 
   Object.assign(T.hooks.act, {
-    poiSearch: search,
+    poiSearch: () => search(),
     poiCat: el => toggleCat(el.dataset.k),
     poiMore: () => { showAll = true; T.app.render(); },
     poiGo: el => {
