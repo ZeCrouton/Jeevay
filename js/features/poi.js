@@ -19,7 +19,8 @@
     data = { ...data, loading: true, error: null };
     T.app.render();
     try {
-      const raw = await P.along(comb.coords, cats, ctrl.signal);
+      const res = await P.along(comb.coords, cats, ctrl.signal, (d, n) => { data = { ...data, progress: n > 1 ? `${d}/${n}` : '' }; T.app.render(); });
+      const raw = res.items;
       // Position le long du parcours et écart à la route
       const { pts } = U.resample(comb.coords, Math.max(80, comb.total / 6000));
       const kx = Math.cos(comb.coords[0][1] * Math.PI / 180);
@@ -33,12 +34,14 @@
           const dx = (p.c[0] - it.c[0]) * kx, dy = p.c[1] - it.c[1], dd = dx * dx + dy * dy;
           if (dd < best) { best = dd; bd = p.d; }
         }
-        items.push({ ...it, d: bd, off: Math.sqrt(best) * 111320 });
+        const off = Math.sqrt(best) * 111320;
+        if (off <= P.CATS[it.cat].radius) items.push({ ...it, d: bd, off });
       }
       items.sort((a, b) => a.d - b.d);
       data = { sig: sigOf(s), mode: s.mode, items, loading: false, error: null };
       showAll = false;
-      if (!items.length) T.ui.toast('Aucun point d’intérêt trouvé le long du parcours');
+      if (res.partial) T.ui.toast('Une partie du parcours n’a pas pu être analysée (serveur saturé) : relancez pour compléter', 'error', 6000);
+      else if (!items.length) T.ui.toast('Aucun point d’intérêt trouvé le long du parcours');
     } catch (e) {
       if (e.name === 'AbortError') return;
       data = { ...data, loading: false, error: e.message };
@@ -122,7 +125,7 @@
     const counts = {};
     if (data.mode === s.mode) data.items.forEach(i => { counts[i.cat] = (counts[i.cat] || 0) + 1; });
     const btn = data.loading
-      ? '<span class="calc"><i class="spin"></i>Recherche…</span>'
+      ? `<span class="calc"><i class="spin"></i>Recherche… ${data.progress || ''}</span>`
       : `<button class="mini" data-act="poiSearch">${I(data.sig ? 'retry' : 'gmaps')}${data.sig ? (stale ? 'Mettre à jour' : 'Actualiser') : 'Rechercher'}</button>`;
     const rows = list.slice(0, showAll ? 400 : 25);
     el.innerHTML = `<div class="sec-h"><h3>Sur le parcours</h3>${btn}</div>

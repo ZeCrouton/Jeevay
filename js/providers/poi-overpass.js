@@ -24,37 +24,66 @@ T.providers.poi = (() => {
     return t.name || t.brand || t.operator || CATS[cat].label.replace(/s$/, '').replace(/s et /, ' / ');
   }
 
-  async function along(coords, cats, signal) {
-    const { pts, total } = T.util.resample(coords, 1000);
-    const step = Math.max(400, total / 220);
-    const line = T.util.resample(coords, step).pts.map(p => p.c[1].toFixed(5) + ',' + p.c[0].toFixed(5)).join(',');
-    if (!pts.length) return [];
-    const parts = [];
-    cats.forEach(k => CATS[k].q.forEach(q => parts.push(`${q}(around:${CATS[k].radius},${line});`)));
-    const query = `[out:json][timeout:60];(${parts.join('')});out center tags 3000;`;
+  // Requête courte en GET par portion de ~25 km (zone rectangulaire), puis filtrage précis côté appareil.
+  // Plus fiable que de longues requêtes POST : moins de charge pour le serveur, pas de délai dépassé.
+  function chunks(coords) {
+    const c = T.util.cum(coords), total = c[c.length - 1] || 0, size = 25000, out = [];
+    for (let a = 0; a < total || !out.length; a += size) {
+      const pts = coords.filter((_, i) => c[i] >= a - 200 && c[i] <= a + size + 200);
+      if (pts.length) out.push(pts);
+      if (!total) break;
+    }
+    return out;
+  }
+
+  async function get(query, signal) {
     let lastErr = null;
     for (const url of T.config.poi.urls) {
       try {
-        const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(query),
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal });
-        if (r.status === 429 || r.status === 504) { lastErr = new Error('Serveur de points d’intérêt saturé, réessayez dans une minute'); continue; }
-        if (!r.ok) { lastErr = new Error('Points d’intérêt indisponibles (' + r.status + ')'); continue; }
-        const j = await r.json();
-        const out = [];
-        for (const e of j.elements || []) {
-          const t = e.tags || {};
-          const cat = cats.find(k => CATS[k].test(t));
-          const lat = e.lat ?? (e.center && e.center.lat), lon = e.lon ?? (e.center && e.center.lon);
-          if (!cat || lat == null) continue;
-          out.push({ id: e.type[0] + e.id, cat, name: label(t, cat), c: [lon, lat], tags: t });
-        }
-        return out;
+        const r = await fetch(url + '?data=' + encodeURIComponent(query), { signal });
+        if (r.ok) return await r.json();
+        lastErr = new Error(r.status === 429 || r.status === 504 ? 'Serveurs de points d’intérêt saturés, réessayez dans une minute' : 'Points d’intérêt indisponibles (' + r.status + ')');
       } catch (e) {
         if (e.name === 'AbortError') throw e;
-        lastErr = e instanceof TypeError ? new Error('Connexion au serveur de points d’intérêt impossible') : e;
+        lastErr = new Error('Serveurs de points d’intérêt injoignables pour le moment, réessayez dans une minute');
       }
     }
-    throw lastErr || new Error('Points d’intérêt indisponibles');
+    throw lastErr;
+  }
+
+  async function along(coords, cats, signal, onProgress) {
+    const parts = chunks(coords);
+    const maxR = Math.max(...cats.map(k => CATS[k].radius));
+    const sel = cats.flatMap(k => CATS[k].q).map(q => q + ';').join('');
+    const out = [], seen = new Set();
+    let done = 0, failed = 0, lastErr = null;
+    const work = async pts => {
+      let s = 90, w = 180, n = -90, e = -180;
+      pts.forEach(p => { s = Math.min(s, p[1]); n = Math.max(n, p[1]); w = Math.min(w, p[0]); e = Math.max(e, p[0]); });
+      const dy = maxR / 111000, dx = dy / Math.max(0.2, Math.cos((s + n) / 2 * Math.PI / 180));
+      const bb = [s - dy, w - dx, n + dy, e + dx].map(v => v.toFixed(4)).join(',');
+      try {
+        const j = await get(`[out:json][timeout:25][bbox:${bb}];(${sel});out center tags 1500;`, signal);
+        for (const el of j.elements || []) {
+          const t = el.tags || {}, id = el.type[0] + el.id;
+          const cat = cats.find(k => CATS[k].test(t));
+          const lat = el.lat ?? (el.center && el.center.lat), lon = el.lon ?? (el.center && el.center.lon);
+          if (!cat || lat == null || seen.has(id)) continue;
+          seen.add(id);
+          out.push({ id, cat, name: label(t, cat), c: [lon, lat], tags: t });
+        }
+      } catch (e) {
+        if (e.name === 'AbortError') throw e;
+        failed++; lastErr = e;
+      }
+      done++;
+      if (onProgress) onProgress(done, parts.length);
+    };
+    // Deux requêtes à la fois au maximum (règle d'usage d'Overpass)
+    let next = 0;
+    await Promise.all([0, 1].map(async () => { while (next < parts.length) await work(parts[next++]); }));
+    if (failed === parts.length) throw lastErr;
+    return { items: out, partial: failed > 0 };
   }
 
   return { CATS, BY_MODE, along };
