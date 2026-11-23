@@ -1,20 +1,17 @@
-/* V2 — Points d'intérêt le long du parcours + alerte d'autonomie carburant (moto). */
+/* V2 — Points d'intérêt le long du parcours + alerte d'autonomie carburant (moto).
+   Chargement automatique de la zone affichée (rapide), ou de tout le parcours à la demande. */
 (() => {
   const U = T.util, I = T.icons, P = T.providers.poi;
-  let data = { sig: null, mode: null, items: [], loading: false, error: null };
-  let ctrl = null, showAll = false;
+  // items : lieux projetés sur le parcours en cours ; route : cases traversées
+  let data = { sig: null, mode: null, route: [], items: [], loading: false, progress: '', error: null, zoomHint: false };
+  let ctrl = null, showAll = false, projCache = { key: '', items: [] };
 
   const sigOf = s => s.legs.map(l => l.id + ':' + l.rev + ':' + l.status).join('|');
-  const catsFor = mode => {
-    const saved = T.settings.get().poiCats[mode];
-    return saved || P.BY_MODE[mode].on;
-  };
+  const catsFor = mode => T.settings.get().poiCats[mode] || P.BY_MODE[mode].on;
 
-  // Projette les lieux sur le parcours (position en km, écart à la route) et garde ceux assez proches
   function project(raw, comb) {
     const { pts } = U.resample(comb.coords, Math.max(80, comb.total / 6000));
-    const kx = Math.cos(comb.coords[0][1] * Math.PI / 180);
-    const items = [];
+    const kx = Math.cos(comb.coords[0][1] * Math.PI / 180), items = [];
     for (const it of raw) {
       let best = Infinity, bd = 0;
       for (const p of pts) {
@@ -24,53 +21,72 @@
       const off = Math.sqrt(best) * 111320;
       if (off <= P.CATS[it.cat].radius) items.push({ ...it, d: bd, off });
     }
-    return items;
+    return items.sort((x, y) => x.d - y.d);
   }
 
-  // cats : catégories à chercher (par défaut celles qui sont cochées) ; les autres résultats déjà trouvés sont gardés
-  async function search(cats) {
-    const s = T.app.st(), comb = T.analysis.combine(s);
-    if (comb.coords.length < 2) { T.ui.toast('Tracez d’abord un parcours', 'error'); return; }
+  // Met à jour la liste à partir de ce qui est déjà en mémoire
+  function refresh(s, comb) {
+    const sig = sigOf(s);
+    if (data.sig !== sig || data.mode !== s.mode) {
+      data = { ...data, sig, mode: s.mode, route: comb.coords.length > 1 ? P.tiles(comb.coords) : [], error: null };
+      showAll = false;
+    }
+    const cats = P.BY_MODE[s.mode].all, raw = P.collect(data.route, cats);
+    const k = sig + '#' + raw.length;
+    if (projCache.key !== k) projCache = { key: k, items: comb.coords.length > 1 ? project(raw, comb) : [] };
+    data.items = projCache.items;
+  }
+
+  async function fetchTiles(keys, cats, label) {
+    if (!keys.length || P.cached(keys, cats)) { T.app.render(); return; }
     if (ctrl) ctrl.abort();
     const my = ctrl = new AbortController();
-    const sig = sigOf(s), same = data.sig === sig && data.mode === s.mode;
-    const want = Array.isArray(cats) ? cats : catsFor(s.mode);
-    const keep = same ? data.items.filter(i => !want.includes(i.cat)) : [];
-    const fetched = new Set(same ? [...(data.fetched || [])].filter(k => !want.includes(k)) : []);
-    data = { sig, mode: s.mode, items: keep, fetched, loading: true, error: null, progress: '' };
+    data = { ...data, loading: true, progress: '', error: null, label };
     T.app.render();
     try {
-      const res = await P.along(comb.coords, want, my.signal, (d, n, part) => {
-        if (my !== ctrl) return;
-        data = { ...data, items: keep.concat(project(part, comb)).sort((a, b) => a.d - b.d), progress: n > 1 ? `${d}/${n}` : '' };
-        T.app.render();
-      });
-      want.forEach(k => fetched.add(k));
-      const items = keep.concat(project(res.items, comb)).sort((a, b) => a.d - b.d);
-      data = { sig, mode: s.mode, items, fetched, loading: false, error: null };
-      showAll = false;
-      if (res.partial) T.ui.toast('Une partie du parcours n’a pas pu être analysée (serveur saturé) : relancez pour compléter', 'error', 6000);
-      else if (!items.length) T.ui.toast('Aucun point d’intérêt trouvé le long du parcours');
+      const r = await P.load(keys, cats, my.signal, (d, n) => { if (my === ctrl) { data.progress = n > 1 ? `${d}/${n}` : ''; T.app.render(); } });
+      if (r.partial) data.error = 'Une partie n’a pas pu être chargée (serveur saturé) : réessayez dans un moment.';
     } catch (e) {
       if (my.signal.aborted) return;
-      data = { ...data, loading: false, error: e.message };
+      data.error = e.message;
     }
-    T.app.render();
+    if (my === ctrl) { data.loading = false; data.progress = ''; T.app.render(); }
   }
 
-  function visible(s) {
-    if (data.mode !== s.mode) return [];
-    const on = new Set(catsFor(s.mode));
-    return data.items.filter(i => on.has(i.cat));
+  // Zone affichée : seulement les cases du parcours visibles à l'écran
+  let viewTimer = 0;
+  function onView() {
+    clearTimeout(viewTimer);
+    viewTimer = setTimeout(() => {
+      const s = T.app.st(), map = T.map.raw;
+      if (!map || !data.route.length) return;
+      const z = map.getZoom(), b = map.getBounds();
+      const keys = P.inView(data.route, [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+      const hint = z < 9.5 || keys.length > 16;
+      if (hint !== data.zoomHint) { data.zoomHint = hint; T.app.render(); }
+      if (hint || !keys.length) return;
+      fetchTiles(keys, catsFor(s.mode), 'zone');
+    }, 700);
+  }
+
+  function wholeRoute(cats) {
+    const s = T.app.st();
+    if (!data.route.length) { T.ui.toast('Tracez d’abord un parcours', 'error'); return; }
+    fetchTiles(data.route, cats || catsFor(s.mode), 'all');
   }
 
   function toggleCat(k) {
     const s = T.app.st(), cur = new Set(catsFor(s.mode));
     if (cur.has(k)) cur.delete(k); else cur.add(k);
     T.settings.set({ poiCats: { ...T.settings.get().poiCats, [s.mode]: [...cur] } });
-    // Catégorie cochée mais pas encore cherchée sur ce parcours : on la cherche seule
-    if (cur.has(k) && data.sig && !data.loading && !(data.fetched && data.fetched.has(k))) { search([k]); return; }
     T.app.render();
+    if (cur.has(k)) onView();
+  }
+
+  function visible(s) {
+    if (data.mode !== s.mode) return [];
+    const on = new Set(catsFor(s.mode));
+    return data.items.filter(i => on.has(i.cat));
   }
 
   function popup(el, c) {
@@ -114,12 +130,11 @@
     void comb;
   }
 
-  // Alerte : distance maximale sans station-service (moto)
+  // Alerte : distance maximale sans station-service (moto), quand tout le parcours est chargé
   T.hooks.alerts.push((s, sum, comb) => {
-    if (s.mode !== 'moto' || data.mode !== 'moto' || data.sig !== sigOf(s) || !comb.total) return;
+    if (s.mode !== 'moto' || !comb.total || !data.route.length || data.sig !== sigOf(s) || !P.cached(data.route, ['fuel'])) return;
     const range = T.settings.get().fuelRange * 1000;
-    const fuel = data.items.filter(i => i.cat === 'fuel').map(i => i.d);
-    const marks = [0, ...fuel, comb.total];
+    const marks = [0, ...data.items.filter(i => i.cat === 'fuel').map(i => i.d), comb.total];
     let gap = 0, at = 0;
     for (let i = 1; i < marks.length; i++) if (marks[i] - marks[i - 1] > gap) { gap = marks[i] - marks[i - 1]; at = marks[i - 1]; }
     if (gap > range * 0.85) {
@@ -130,27 +145,36 @@
   T.hooks.render.push((s, sum, comb) => {
     const el = document.getElementById('pois');
     if (!el) return;
-    if (comb.coords.length < 2) { el.innerHTML = ''; T.map.setPois([]); return; }
-    const stale = data.sig && data.sig !== sigOf(s);
+    if (comb.coords.length < 2) { el.innerHTML = ''; T.map.setPois([]); data.route = []; return; }
+    const before = data.sig;
+    refresh(s, comb);
+    if (before !== data.sig) onView();
     const list = visible(s), all = P.BY_MODE[s.mode].all, on = new Set(catsFor(s.mode));
     const counts = {};
-    if (data.mode === s.mode) data.items.forEach(i => { counts[i.cat] = (counts[i.cat] || 0) + 1; });
-    const btn = data.loading
-      ? `<span class="calc"><i class="spin"></i>Recherche… ${data.progress || ''}</span>`
-      : `<button class="mini" data-act="poiSearch">${I(data.sig ? 'retry' : 'gmaps')}${data.sig ? (stale ? 'Mettre à jour' : 'Actualiser') : 'Rechercher'}</button>`;
-    const rows = list.slice(0, showAll ? 400 : 25);
-    el.innerHTML = `<div class="sec-h"><h3>Sur le parcours</h3>${btn}</div>
+    data.items.forEach(i => { counts[i.cat] = (counts[i.cat] || 0) + 1; });
+    const allDone = P.cached(data.route, [...on]);
+    const fuelDone = s.mode !== 'moto' || P.cached(data.route, ['fuel']);
+    const status = data.loading
+      ? `<span class="calc"><i class="spin"></i>${data.label === 'all' ? 'Tout le parcours' : 'Zone affichée'} ${data.progress}</span>`
+      : !allDone ? `<button class="mini" data-act="poiAll">${I('route')}Tout le parcours</button>` : '';
+    const rows = list.slice(0, showAll ? 500 : 25);
+    el.innerHTML = `<div class="sec-h"><h3>Sur le parcours</h3>${status}</div>
+      <div class="cats">${all.map(k => `<button class="cat${on.has(k) ? ' on' : ''}" data-act="poiCat" data-k="${k}" style="--c:${P.CATS[k].color}"><i></i>${P.CATS[k].label}${counts[k] ? `<b>${counts[k]}</b>` : ''}</button>`).join('')}</div>
       ${data.error ? `<p class="err">${U.esc(data.error)}</p>` : ''}
-      ${!data.sig && !data.loading ? `<p class="muted small">Stations-service, cols, points d’eau, panoramas… le long de votre tracé.</p>` : ''}
-      ${data.sig && data.mode === s.mode ? `<div class="cats">${all.map(k => `<button class="cat${on.has(k) ? ' on' : ''}" data-act="poiCat" data-k="${k}" style="--c:${P.CATS[k].color}"><i></i>${P.CATS[k].label}<b>${data.fetched && data.fetched.has(k) ? counts[k] || 0 : ''}</b></button>`).join('')}</div>
-        ${stale ? '<p class="muted small">Le parcours a changé : mettez à jour pour recaler les distances.</p>' : ''}
-        <ul class="pois">${rows.map(it => `<li><button data-act="poiGo" data-id="${it.id}"><i class="dot" style="background:${P.CATS[it.cat].color}"></i><span class="pn">${U.esc(it.name)}</span><span class="pk">km ${U.nf(it.d / 1000, 1)}</span></button></li>`).join('')}</ul>
-        ${list.length > rows.length ? `<button class="mini" data-act="poiMore">Voir les ${list.length} lieux</button>` : ''}` : ''}`;
+      ${data.zoomHint && !allDone ? '<p class="muted small">Zoomez sur le parcours pour afficher les lieux de la zone, ou chargez tout le parcours.</p>' : ''}
+      ${!fuelDone && !data.loading ? '<p class="muted small">Alerte carburant : chargez « Tout le parcours » pour vérifier l’autonomie.</p>' : ''}
+      ${rows.length ? `<ul class="pois">${rows.map(it => `<li><button data-act="poiGo" data-id="${it.id}"><i class="dot" style="background:${P.CATS[it.cat].color}"></i><span class="pn">${U.esc(it.name)}</span><span class="pk">km ${U.nf(it.d / 1000, 1)}</span></button></li>`).join('')}</ul>` : ''}
+      ${list.length > rows.length ? `<button class="mini" data-act="poiMore">Voir les ${list.length} lieux</button>` : ''}`;
     T.map.setPois(list.map(it => ({ type: 'Feature', geometry: { type: 'Point', coordinates: it.c }, properties: { id: it.id, color: P.CATS[it.cat].color } })));
   });
 
+  T.hooks.init.push(() => {
+    const map = T.map.raw;
+    if (map) map.on('moveend', onView);
+  });
+
   Object.assign(T.hooks.act, {
-    poiSearch: () => search(),
+    poiAll: () => wholeRoute(),
     poiCat: el => toggleCat(el.dataset.k),
     poiMore: () => { showAll = true; T.app.render(); },
     poiGo: el => {

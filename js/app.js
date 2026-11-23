@@ -152,6 +152,7 @@
     if (!L || L.kind === 'track') return;
     UI.roadChooser({
       title: `Tronçon ${i + 1} · préférer :`, mode: s.mode, current: L.road, kind: L.kind,
+      autoShown: L.road === 'auto' && L.an && L.an.comp ? T.panel.roadOf(L, s.mode).id : null,
       onPick: road => {
         const cur = st().legs[i];
         if (!cur) return;
@@ -452,7 +453,7 @@
     const pace = `${Math.floor(s.runPace)}:${String(Math.round((s.runPace % 1) * 60)).padStart(2, '0')}`;
     UI.modal({
       title: 'Réglages',
-      body: `<label class="field"><span>Route préférée par défaut (${U.esc(T.config.modes[st().mode].label)})</span><select id="set-road">${T.config.modes[st().mode].roads.map(r => `<option value="${r.id}" ${r.id === E.defaultRoad(st().mode) ? 'selected' : ''}>${U.esc(r.label)}</option>`).join('')}</select></label>
+      body: `<label class="field"><span>Route préférée par défaut (${U.esc(T.config.modes[st().mode].label)})</span><select id="set-road">${[T.config.kinds.auto, ...T.config.modes[st().mode].roads].map(r => `<option value="${r.id}" ${r.id === E.defaultRoad(st().mode) ? 'selected' : ''}>${U.esc(r.label)}</option>`).join('')}</select></label>
         <label class="chk"><input type="checkbox" id="set-snap" ${s.snapMain ? 'checked' : ''}> Moto et vélo : placer les nouveaux points sur la route principale la plus proche</label>
         <label class="field"><span>Allure de course (min:s par km)</span><input id="set-pace" value="${pace}" inputmode="numeric" placeholder="6:00"></label>
         <label class="field"><span>Autonomie de la moto (km, pour l’alerte carburant)</span><input id="set-fuel" type="number" min="50" max="900" value="${s.fuelRange}"></label>

@@ -36,8 +36,8 @@ T.providers.routing = (() => {
 
   function costingFor(mode, roadId, settings) {
     const m = T.config.modes[mode];
-    const road = m.roads.find(r => r.id === roadId) || m.roads[0];
-    const opts = { ...road.opts };
+    const road = roadId === 'auto' ? null : m.roads.find(r => r.id === roadId) || m.roads[0];
+    const opts = road ? { ...road.opts } : {}; // « proposé » : réglages par défaut du moteur, sans préférence
     if (mode === 'run' && settings.runSpeed) opts.walking_speed = settings.runSpeed;
     if (mode === 'velo' && settings.bikeSpeed) opts.cycling_speed = settings.bikeSpeed;
     return { costing: m.costing, opts };

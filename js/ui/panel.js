@@ -4,10 +4,24 @@ window.T = window.T || {};
 T.panel = (() => {
   const U = T.util, I = T.icons, A = T.analysis;
 
+  // Pour un tronçon « proposé », le type affiché est celui de la voie majoritaire du trajet calculé
+  const AUTO_MAP = {
+    moto: { autoroute: 'autoroute', nationale: 'nationale', departementale: 'departementale', locale: 'petites' },
+    velo: { cyclable: 'calme', locale: 'calme', chemin: 'vtt', departementale: 'route', nationale: 'route' },
+    run: { chemin: 'trail', pieton: 'urbain' }
+  };
   function roadOf(L, mode) {
     if (L.kind === 'line') return T.config.kinds.line;
     if (L.kind === 'track') return T.config.kinds.track;
     const m = T.config.modes[mode];
+    if (L.road === 'auto') {
+      const comp = L.an && L.an.comp;
+      if (!comp) return { ...T.config.kinds.auto, auto: true };
+      let main = null, v = 0;
+      for (const k in comp) if (k !== 'inconnu' && comp[k] > v) { v = comp[k]; main = k; }
+      const id = (AUTO_MAP[mode] || {})[main] || m.roads[0].id;
+      return { ...(m.roads.find(r => r.id === id) || m.roads[0]), auto: true };
+    }
     return m.roads.find(r => r.id === L.road) || m.roads[0];
   }
 
@@ -48,11 +62,16 @@ T.panel = (() => {
       <ul class="legend">${parts.map(p => `<li><i style="background:${p.color}"></i>${U.esc(p.label)}<b>${U.nf(p.v / tot * 100)} %</b><span>${U.fmtKm(p.v)}</span></li>`).join('')}</ul>`;
   }
 
+  let alertsOpen = false;
   function alerts(sum) {
-    if (!sum.alerts.length) return '';
-    return `<h3>Points d’attention</h3><ul class="alerts">${sum.alerts.map(a =>
-      `<li><button class="alert alert-${a.lvl}" data-act="goto" data-d="${Math.round(a.d)}">${I(a.lvl === 'warn' ? 'warn' : 'info')}<span>${U.esc(a.text)}</span></button></li>`).join('')}</ul>`;
+    const n = sum.alerts.length;
+    if (!n) return '';
+    const shown = alertsOpen ? sum.alerts : sum.alerts.slice(0, 3);
+    return `<h3>Points d’attention <span class="cnt">${n}</span></h3><ul class="alerts">${shown.map(a =>
+      `<li><button class="alert alert-${a.lvl}" data-act="goto" data-d="${Math.round(a.d)}">${I(a.lvl === 'warn' ? 'warn' : 'info')}<span>${U.esc(a.text)}</span></button></li>`).join('')}</ul>
+      ${n > 3 ? `<button class="more-btn${alertsOpen ? ' open' : ''}" data-act="alertsToggle" aria-expanded="${alertsOpen}">${alertsOpen ? 'Réduire' : `Voir les ${n - 3} autres`}${I('chev', 'sm')}</button>` : ''}`;
   }
+  T.hooks.act.alertsToggle = () => { alertsOpen = !alertsOpen; T.app.render(); };
 
   function legs(state) {
     if (!state.legs.length) return '';
@@ -69,7 +88,7 @@ T.panel = (() => {
       else st = (() => { const mm = A.mismatch(L, a, state.mode); return mm ? `<span class="mm">${I('info', 'sm')}${mm.absent ? 'absent' : 'minoritaire (' + U.nf(mm.share * 100) + ' %)'} · surtout ${U.esc(A.gLabel(mm.main))}</span>` : ''; })() + `<span>${U.fmtKm(L.distance)}</span>${a.hasElev ? `<span>+${U.nf(a.up)} m</span>` : ''}${state.mode === 'moto' && T.score && T.score.leg(L) ? `<span class="lsc" title="Plaisir moto">${U.nf(T.score.leg(L).v, 1)}/10</span>` : ''}${(a.hairpins || []).length && state.mode !== 'run' ? `<span>${a.hairpins.length} épingle${a.hairpins.length > 1 ? 's' : ''}</span>` : ''}`;
       const chip = L.kind === 'track'
         ? `<span class="chip" style="--c:${r.color};--ci:${r.ink}" title="${U.esc(L.name || '')}"><span class="cart">${r.short}</span>${U.esc(L.name || r.label)}</span>`
-        : `<button class="chip" data-act="road" data-i="${i}" style="--c:${r.color};--ci:${r.ink}" title="Changer le type de route préféré"><span class="pref">Préférer</span><span class="cart">${U.esc(r.short)}</span>${U.esc(r.label)}${I('chev', 'sm')}</button>`;
+        : `<button class="chip" data-act="road" data-i="${i}" style="--c:${r.color};--ci:${r.ink}" title="Changer le type de route préféré"><span class="pref">Préférer</span><span class="cart">${U.esc(r.short)}</span>${U.esc(r.label)}${r.auto ? '<span class="pref">proposé</span>' : ''}${I('chev', 'sm')}</button>`;
       return `<li class="leg leg-${L.status}">
         <button class="leg-names" data-act="focus" data-i="${i}"><span class="node">${node(i)}</span>${name(i)}<i>→</i><span class="node">${node(i + 1)}</span>${name(i + 1)}</button>
         <div class="leg-meta">${chip}${st}</div></li>`;

@@ -57,20 +57,21 @@ T.ui = (() => {
 
   // Carte flottante « quel type de route ? »
   let chooser = null;
-  function roadChooser({ title, mode, current, kind, onPick }) {
+  function roadChooser({ title, mode, current, kind, onPick, autoShown }) {
     closeChooser();
     const m = T.config.modes[mode];
-    const opts = [...m.roads, T.config.kinds.line];
+    const opts = [T.config.kinds.auto, ...m.roads, T.config.kinds.line];
     const el = document.createElement('div');
     el.className = 'chooser';
     el.innerHTML = `<div class="chooser-head"><b>${U.esc(title)}</b><button class="icon-btn" data-x aria-label="Fermer">${I('close')}</button></div>
       <div class="chooser-grid">${opts.map(r => {
         const on = (kind === 'line' && r.id === 'line') || (kind !== 'line' && r.id === current);
-        return `<button class="road-opt${on ? ' on' : ''}" data-road="${r.id}">
+        const shown = kind !== 'line' && autoShown && r.id === autoShown;
+        return `<button class="road-opt${on ? ' on' : ''}${shown ? ' shown' : ''}" data-road="${r.id}">
           <span class="cart" style="--c:${r.color};--ci:${r.ink}">${U.esc(r.short)}</span>
           <span class="ro-txt"><b>${U.esc(r.label)}</b><small>${U.esc(r.desc || '')}</small></span></button>`;
       }).join('')}</div>
-      <p class="chooser-note">Si ce type de route est absent ou minoritaire sur le tronçon, l’app vous le signale.</p>`;
+      <p class="chooser-note">L’itinéraire s’adapte à votre choix quand la route le permet ; sinon, l’app vous le signale.</p>`;
     el.addEventListener('click', e => {
       const b = e.target.closest('[data-road]');
       if (b) { onPick(b.dataset.road); closeChooser(); return; }

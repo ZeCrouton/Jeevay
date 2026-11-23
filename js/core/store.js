@@ -6,6 +6,8 @@ T.settings = (() => {
   const def = { snapMain: true, lastRoad: {}, runPace: 6, bikeSpeed: 22, autoConnect: true, mapStyle: 'liberty', colorBy: 'road', fuelRange: 200, poiCats: {} };
   const s = { ...def };
   try { Object.assign(s, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* stockage indisponible */ }
+  // v1.1 : la préférence par défaut devient « proposé par l'app »
+  if (!s.v11) { s.lastRoad = {}; s.v11 = true; try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) { /* ignore */ } }
   return {
     get: () => s,
     set(p) { Object.assign(s, p); try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) { /* ignore */ } }

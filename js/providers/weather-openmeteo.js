@@ -6,28 +6,47 @@ T.providers = T.providers || {};
 T.providers.weather = (() => {
   const H = 'temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m';
 
-  async function at(points, signal) {
+  // Heures en temps universel (timeformat=unixtime) : aucun calcul de fuseau, donc pas d'erreur d'heure
+  async function query(points, signal) {
     const lat = points.map(p => p.c[1].toFixed(3)).join(','), lon = points.map(p => p.c[0].toFixed(3)).join(',');
-    const url = `${T.config.weather.url}?latitude=${lat}&longitude=${lon}&hourly=${H}&daily=sunset&timezone=auto&forecast_days=${T.config.weather.days}&wind_speed_unit=kmh`;
-    const r = await fetch(url, { signal });
-    if (!r.ok) throw new Error('Météo indisponible');
-    let j = await r.json();
-    if (!Array.isArray(j)) j = [j];
-    return points.map((p, i) => {
-      const f = j[i];
-      if (!f || !f.hourly) return null;
-      const off = (f.utc_offset_seconds || 0) * 1000;
-      const local = new Date(p.t.getTime() + off).toISOString();
-      const key = local.slice(0, 13) + ':00';
-      const k = f.hourly.time.indexOf(key);
-      if (k < 0) return null;
-      const g = n => f.hourly[n] ? f.hourly[n][k] : null;
-      const dk = f.daily && f.daily.time ? f.daily.time.indexOf(local.slice(0, 10)) : -1;
-      // Les heures renvoyées sont locales sans fuseau : on les recale en heure absolue
-      const sunset = dk >= 0 && f.daily.sunset[dk] ? new Date(Date.parse(f.daily.sunset[dk] + 'Z') - off) : null;
-      return { temp: g('temperature_2m'), rainProb: g('precipitation_probability'), rain: g('precipitation'),
-        code: g('weather_code'), wind: g('wind_speed_10m'), gust: g('wind_gusts_10m'), sunset };
-    });
+    const url = `${T.config.weather.url}?latitude=${lat}&longitude=${lon}&hourly=${H}&daily=sunset&timeformat=unixtime&forecast_days=${T.config.weather.days}`;
+    const r = await T.util.fetchT(url, { signal }, 15000);
+    let j = null;
+    try { j = await r.json(); } catch (e) { /* réponse illisible */ }
+    if (!r.ok) throw new Error('Météo indisponible' + (j && j.reason ? ' : ' + j.reason : ' (' + r.status + ')'));
+    return Array.isArray(j) ? j : [j];
+  }
+
+  function pick(f, t) {
+    if (!f || !f.hourly || !f.hourly.time) return null;
+    const ts = t.getTime() / 1000, times = f.hourly.time;
+    let k = 0, best = Infinity;
+    for (let i = 0; i < times.length; i++) { const d = Math.abs(times[i] - ts); if (d < best) { best = d; k = i; } }
+    if (best > 5400) return null; // hors de la période de prévision
+    const g = n => (f.hourly[n] ? f.hourly[n][k] : null);
+    let sunset = null;
+    if (f.daily && f.daily.sunset) {
+      const ss = f.daily.sunset.filter(Boolean).map(x => x * 1000);
+      sunset = ss.reduce((a, x) => (Math.abs(x - t) < Math.abs(a - t) ? x : a), ss[0] || 0);
+      sunset = sunset ? new Date(sunset) : null;
+    }
+    return { temp: g('temperature_2m'), rainProb: g('precipitation_probability'), rain: g('precipitation'),
+      code: g('weather_code'), wind: g('wind_speed_10m'), gust: g('wind_gusts_10m'), sunset };
+  }
+
+  async function at(points, signal) {
+    let res;
+    try { res = await query(points, signal); }
+    catch (e) {
+      if (signal && signal.aborted) throw e;
+      // Repli : un point à la fois
+      res = [];
+      for (const p of points) {
+        try { res.push((await query([p], signal))[0]); } catch (x) { if (signal && signal.aborted) throw x; res.push(null); }
+      }
+      if (!res.some(Boolean)) throw e;
+    }
+    return points.map((p, i) => pick(res[i], p.t));
   }
 
   // Code météo OMM -> type d'icône et libellé

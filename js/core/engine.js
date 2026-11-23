@@ -7,7 +7,7 @@ T.engine = (() => {
 
   function defaultRoad(mode) {
     const m = T.config.modes[mode], last = T.settings.get().lastRoad[mode];
-    return m.roads.some(r => r.id === last) ? last : m.defaultRoad;
+    return last === 'auto' || m.roads.some(r => r.id === last) ? last : m.defaultRoad;
   }
 
   function makeLeg(a, b, s, road, extra = {}) {

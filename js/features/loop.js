@@ -18,7 +18,7 @@
           <option value="center" ${o.from === 'center' ? 'selected' : ''}>Centre de la carte</option>
           <option value="gps">Ma position</option></select></label>
         <label class="field"><span>Direction</span><select id="lp-dir">${DIRS.map(([v, l]) => `<option value="${v}" ${v === o.dir ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-        <label class="field"><span>Préférer</span><select id="lp-road">${m.roads.map(r => `<option value="${r.id}" ${r.id === o.road ? 'selected' : ''}>${U.esc(r.label)}</option>`).join('')}</select></label>
+        <label class="field"><span>Préférer</span><select id="lp-road">${[T.config.kinds.auto, ...m.roads].map(r => `<option value="${r.id}" ${r.id === o.road ? 'selected' : ''}>${U.esc(r.label)}</option>`).join('')}</select></label>
         ${s.waypoints.length ? '<p class="muted small">Le parcours actuel sera remplacé (Ctrl+Z pour revenir).</p>' : ''}`,
       actions: [{ label: 'Annuler' }, {
         label: 'Générer la boucle', primary: true, onClick: root => {

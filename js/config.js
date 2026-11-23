@@ -5,7 +5,7 @@ window.T = window.T || {};
 
 T.config = {
   appName: 'Trajecto',
-  version: '1.0.4',
+  version: '1.1.0',
   storagePrefix: 'trajecto.',
 
   map: {
@@ -35,7 +35,7 @@ T.config = {
 
   modes: {
     moto: {
-      label: 'Moto', costing: 'motorcycle', accent: '#ff4d00', defaultRoad: 'departementale',
+      label: 'Moto', costing: 'motorcycle', accent: '#ff4d00', defaultRoad: 'auto',
       roads: [
         { id: 'autoroute', label: 'Autoroute', short: 'A', color: '#1f5fbf', ink: '#fff',
           desc: 'Le plus rapide. Péages possibles.', opts: { use_highways: 1, use_tolls: 1, use_primary: 1 } },
@@ -48,7 +48,7 @@ T.config = {
       ]
     },
     velo: {
-      label: 'Vélo', costing: 'bicycle', accent: '#00a37a', defaultRoad: 'route',
+      label: 'Vélo', costing: 'bicycle', accent: '#00a37a', defaultRoad: 'auto',
       roads: [
         { id: 'route', label: 'Vélo de route', short: 'R', color: '#d7261e', ink: '#fff',
           desc: 'Bitume, routes roulantes.', opts: { bicycle_type: 'Road', use_roads: 0.6, use_hills: 0.5, avoid_bad_surfaces: 0.9 } },
@@ -61,7 +61,7 @@ T.config = {
       ]
     },
     run: {
-      label: 'Running', costing: 'pedestrian', accent: '#e3007d', defaultRoad: 'route',
+      label: 'Running', costing: 'pedestrian', accent: '#e3007d', defaultRoad: 'auto',
       roads: [
         { id: 'route', label: 'Mixte', short: 'M', color: '#e3007d', ink: '#fff',
           desc: 'Le plus direct à pied.', opts: { use_hills: 0.5 } },
@@ -76,6 +76,7 @@ T.config = {
   },
 
   kinds: {
+    auto: { id: 'auto', label: 'Proposé par l’app', short: 'P', color: '#495057', ink: '#fff', desc: 'Le trajet calculé sans préférence.' },
     line: { id: 'line', label: 'Ligne droite', short: '—', color: '#868e96', ink: '#fff', desc: 'À vol d’oiseau, sans suivre la route.' },
     track: { id: 'track', label: 'Tracé importé', short: 'GPX', color: '#0b7285', ink: '#fff' }
   },
