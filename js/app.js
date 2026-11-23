@@ -566,7 +566,7 @@
   function initSheet() {
     const panel = $('#panel'), handle = panel.querySelector('.sheet-handle');
     let y0 = null, t0 = 0, base = 0, moved = false, suppress = false;
-    const peek = () => ($('#app').classList.contains('has-route') ? 214 : 300);
+    const peek = () => 132;
     const closedY = () => Math.max(0, panel.offsetHeight - peek());
     handle.addEventListener('pointerdown', e => {
       if (window.innerWidth > 760) return;
