@@ -1,5 +1,5 @@
 /* Service worker : l'application s'ouvre même hors connexion (la carte et les calculs, eux, ont besoin d'Internet). */
-const CACHE = 'trajecto-v1.0.0';
+const CACHE = 'trajecto-v1.0.1';
 const SHELL = [
   './',
   'index.html',
@@ -38,13 +38,12 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
-// Fichiers du site : réponse immédiate depuis le cache, mise à jour en arrière-plan. Le reste passe par le réseau.
+// Fichiers du site : réseau d'abord (toujours la dernière version), cache si hors connexion.
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
   if (e.request.method !== 'GET' || u.origin !== location.origin) return;
-  e.respondWith(caches.open(CACHE).then(async c => {
-    const hit = await c.match(e.request, { ignoreSearch: true });
-    const net = fetch(e.request).then(r => { if (r.ok) c.put(e.request, r.clone()); return r; }).catch(() => hit);
-    return hit || net;
-  }));
+  e.respondWith(fetch(e.request).then(r => {
+    if (r.ok) { const c = r.clone(); caches.open(CACHE).then(k => k.put(e.request, c)); }
+    return r;
+  }).catch(() => caches.match(e.request, { ignoreSearch: true })));
 });

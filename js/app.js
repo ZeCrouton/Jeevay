@@ -550,6 +550,41 @@
       default: if (T.hooks.act[a]) T.hooks.act[a](el);
     }
   }
+  // Tiroir mobile : glisser la poignée vers le haut / le bas (un appui simple bascule aussi)
+  function initSheet() {
+    const panel = $('#panel'), handle = panel.querySelector('.sheet-handle');
+    let y0 = null, t0 = 0, base = 0, moved = false, suppress = false;
+    const peek = () => ($('#app').classList.contains('has-route') ? 214 : 300);
+    const closedY = () => Math.max(0, panel.offsetHeight - peek());
+    handle.addEventListener('pointerdown', e => {
+      if (window.innerWidth > 760) return;
+      y0 = e.clientY; t0 = Date.now(); moved = false;
+      base = panel.classList.contains('open') ? 0 : closedY();
+      panel.style.transition = 'none';
+      handle.setPointerCapture(e.pointerId);
+    });
+    handle.addEventListener('pointermove', e => {
+      if (y0 == null) return;
+      const dy = e.clientY - y0;
+      if (Math.abs(dy) > 6) moved = true;
+      if (moved) panel.style.setProperty('transform', `translateY(${U.clamp(base + dy, 0, closedY())}px)`, 'important');
+    });
+    const end = e => {
+      if (y0 == null) return;
+      const dy = e.clientY - y0, v = dy / Math.max(1, Date.now() - t0);
+      y0 = null;
+      panel.style.transition = '';
+      panel.style.removeProperty('transform');
+      if (!moved) return;
+      suppress = true;
+      const open = v < -0.3 ? true : v > 0.3 ? false : base + dy < closedY() / 2;
+      panel.classList.toggle('open', open);
+    };
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+    handle.addEventListener('click', e => { if (suppress) { suppress = false; e.stopPropagation(); } });
+  }
+
   const collapseSheet = () => { if (window.innerWidth <= 760) $('#panel').classList.remove('open'); };
 
   function locate() {
@@ -611,6 +646,7 @@
       M.setHover(U.at(comb.coords, comb.cum, d), accent());
     });
     initSearch();
+    initSheet();
 
     document.addEventListener('click', e => {
       const b = e.target.closest('[data-act]');
