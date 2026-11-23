@@ -1,5 +1,5 @@
 /* Service worker : l'application s'ouvre même hors connexion (la carte et les calculs, eux, ont besoin d'Internet). */
-const CACHE = 'trajecto-v1.0.3';
+const CACHE = 'trajecto-v1.0.4';
 const SHELL = [
   './',
   'index.html',
@@ -38,11 +38,11 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
-// Fichiers du site : réseau d'abord (toujours la dernière version), cache si hors connexion.
+// Fichiers du site : réseau d'abord en revalidant le cache HTTP (GitHub Pages garde 10 min), cache si hors connexion.
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
   if (e.request.method !== 'GET' || u.origin !== location.origin) return;
-  e.respondWith(fetch(e.request).then(r => {
+  e.respondWith(fetch(e.request, { cache: 'no-cache' }).then(r => {
     if (r.ok) { const c = r.clone(); caches.open(CACHE).then(k => k.put(e.request, c)); }
     return r;
   }).catch(() => caches.match(e.request, { ignoreSearch: true })));
