@@ -66,7 +66,7 @@ T.map = (() => {
 
   function onClick(e) {
     const c = [e.lngLat.lng, e.lngLat.lat];
-    if (ready) {
+    if (ready && !(h.appendMode && h.appendMode())) {
       const f = map.queryRenderedFeatures(box(e.point, 8), { layers: ['tj-poi', 'tj-alerts', 'tj-hit'] });
       const po = f.find(x => x.layer.id === 'tj-poi');
       if (po) return h.poiClick && h.poiClick(po.properties, po.geometry.coordinates);

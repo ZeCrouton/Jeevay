@@ -80,6 +80,7 @@ button { cursor: pointer; }
 .tool:hover { background: var(--panel-2); }
 .tool:disabled { opacity: .35; cursor: default; background: none; }
 .tool[aria-pressed=true] { background: var(--accent); color: #fff; }
+#app.append-mode .maplibregl-canvas { cursor: crosshair; }
 .slope-legend {
   position: absolute; z-index: 4; left: 68px; top: calc(max(12px, env(safe-area-inset-top)) + 200px);
   background: var(--panel); border-radius: 10px; box-shadow: var(--shadow); padding: 8px 10px; font: 600 13px var(--num);

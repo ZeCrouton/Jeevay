@@ -5,6 +5,7 @@
   const accent = () => T.config.modes[st().mode].accent;
 
   // ---------- Actions sur le parcours ----------
+  let appendMode = false;
   function addPoint(c) {
     UI.closeChooser();
     const snap = T.settings.get().snapMain && st().mode !== 'run';
@@ -181,12 +182,14 @@
       <div class="pop-a">
         <a class="btn btn-sm" href="${U.streetViewUrl(p, head)}" target="_blank" rel="noopener">${I('eye')}Street View</a>
         <button class="btn btn-sm" data-a="ins">${I('plus')}Point ici</button>
+        <button class="btn btn-sm" data-a="end">${I('append')}Continuer ici</button>
         ${L.kind !== 'track' ? `<button class="btn btn-sm" data-a="road">${I('route')}Préférer…</button>` : ''}
       </div>`;
     el.addEventListener('click', ev => {
       const a = ev.target.closest('[data-a]');
       if (!a) return;
       if (a.dataset.a === 'ins') insertOnLeg(i, p);
+      if (a.dataset.a === 'end') { M.closePopup(); addPoint(p); }
       if (a.dataset.a === 'road') { M.closePopup(); askRoad(i); }
     });
     M.openPopup(p, el);
@@ -546,6 +549,14 @@
         T.settings.set({ mapStyle: nx.id }); M.setStyle(nx.id); UI.toast('Fond de carte : ' + nx.label, 'info', 1800);
         break;
       }
+      case 'append': {
+        appendMode = !appendMode;
+        M.closePopup();
+        $('#app').classList.toggle('append-mode', appendMode);
+        $('#tool-append').setAttribute('aria-pressed', String(appendMode));
+        UI.toast(appendMode ? 'Ajout à la fin : chaque clic ajoute un point au bout du parcours' : 'Mode ajout désactivé', 'info', 2400);
+        break;
+      }
       case 'locate': locate(); break;
       case 'sheet': $('#panel').classList.toggle('open'); break;
       default: if (T.hooks.act[a]) T.hooks.act[a](el);
@@ -641,6 +652,7 @@
   function init() {
     document.querySelectorAll('[data-icon]').forEach(el => { el.insertAdjacentHTML('afterbegin', I(el.dataset.icon)); });
     M.init('map', {
+      appendMode: () => appendMode,
       mapClick: c => { M.closePopup(); addPoint(c); },
       legClick: (i, c) => { UI.closeChooser(); legPopup(i, c); },
       wpClick: id => { UI.closeChooser(); wpPopup(id); },
