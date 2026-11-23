@@ -5,7 +5,7 @@ window.T = window.T || {};
 
 T.config = {
   appName: 'Trajecto',
-  version: '1.1.0',
+  version: '1.1.1',
   storagePrefix: 'trajecto.',
 
   map: {
@@ -21,7 +21,8 @@ T.config = {
   // Calcul d'itinéraire (serveur public FOSSGIS, gratuit, usage raisonnable)
   routing: { url: 'https://valhalla1.openstreetmap.de', concurrency: 2, maxMatchKm: 200 },
   // Altitudes (Open-Meteo, gratuit, sans clé)
-  elevation: { url: 'https://api.open-meteo.com/v1/elevation', batch: 100 },
+  // Altitudes : tuiles de relief ouvertes (AWS Terrain Tiles), sans clé ni quota
+  elevation: { url: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png', zoom: 12 },
   // Recherche de lieux (Photon / Komoot, gratuit, sans clé)
   geocode: { url: 'https://photon.komoot.io', fallback: 'https://nominatim.openstreetmap.org' },
 

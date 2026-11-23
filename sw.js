@@ -1,5 +1,5 @@
 /* Service worker : l'application s'ouvre même hors connexion (la carte et les calculs, eux, ont besoin d'Internet). */
-const CACHE = 'trajecto-v1.1.0';
+const CACHE = 'trajecto-v1.1.1';
 const SHELL = [
   './',
   'index.html',
@@ -21,7 +21,7 @@ const SHELL = [
   'js/features/weather.js',
   'js/io/export.js',
   'js/io/import.js',
-  'js/providers/elevation-openmeteo.js',
+  'js/providers/elevation-terrain.js',
   'js/providers/geocode-photon.js',
   'js/providers/poi-overpass.js',
   'js/providers/routing-valhalla.js',

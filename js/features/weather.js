@@ -40,7 +40,7 @@
     ctrl = new AbortController();
     data = { ...data, loading: true, error: null };
     T.app.render();
-    const n = U.clamp(Math.round(comb.total / 25000), 1, 11);
+    const n = U.clamp(Math.round(comb.total / 30000), 1, 7); // peu de points : le quota gratuit est compté par point
     const pts = [];
     for (let k = 0; k <= n; k++) {
       const d = comb.total * k / n;

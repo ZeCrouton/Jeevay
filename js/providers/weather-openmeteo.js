@@ -7,14 +7,22 @@ T.providers.weather = (() => {
   const H = 'temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m';
 
   // Heures en temps universel (timeformat=unixtime) : aucun calcul de fuseau, donc pas d'erreur d'heure
+  const memo = new Map(); // réponses gardées 30 min
   async function query(points, signal) {
+    const last = Math.max(...points.map(p => p.t.getTime()));
+    const days = T.util.clamp(Math.ceil((last - Date.now()) / 86400e3) + 1, 1, T.config.weather.days);
+    const mk = points.map(p => p.c[1].toFixed(2) + ',' + p.c[0].toFixed(2)).join(';') + '|' + days;
+    const m = memo.get(mk);
+    if (m && Date.now() - m.at < 1800e3) return m.res;
     const lat = points.map(p => p.c[1].toFixed(3)).join(','), lon = points.map(p => p.c[0].toFixed(3)).join(',');
-    const url = `${T.config.weather.url}?latitude=${lat}&longitude=${lon}&hourly=${H}&daily=sunset&timeformat=unixtime&forecast_days=${T.config.weather.days}`;
+    const url = `${T.config.weather.url}?latitude=${lat}&longitude=${lon}&hourly=${H}&daily=sunset&timeformat=unixtime&forecast_days=${days}`;
     const r = await T.util.fetchT(url, { signal }, 15000);
     let j = null;
     try { j = await r.json(); } catch (e) { /* réponse illisible */ }
     if (!r.ok) throw new Error('Météo indisponible' + (j && j.reason ? ' : ' + j.reason : ' (' + r.status + ')'));
-    return Array.isArray(j) ? j : [j];
+    const res = Array.isArray(j) ? j : [j];
+    memo.set(mk, { at: Date.now(), res });
+    return res;
   }
 
   function pick(f, t) {
@@ -38,7 +46,7 @@ T.providers.weather = (() => {
     let res;
     try { res = await query(points, signal); }
     catch (e) {
-      if (signal && signal.aborted) throw e;
+      if (signal && signal.aborted || /limit/i.test(e.message)) throw e;
       // Repli : un point à la fois
       res = [];
       for (const p of points) {

@@ -20,7 +20,7 @@ T.providers.poi = (() => {
     velo: { all: ['water', 'pass', 'view', 'food', 'bike', 'wc'], on: ['water', 'pass', 'bike'] },
     run: { all: ['water', 'wc', 'view', 'pass'], on: ['water', 'wc'] }
   };
-  const SIZE = 0.15;
+  const SIZE = 0.2;
 
   function label(t, cat) {
     return t.name || t.brand || t.operator || CATS[cat].label.replace(/s$/, '').replace(/s et /, ' / ');
@@ -49,8 +49,11 @@ T.providers.poi = (() => {
   async function get(query, signal) {
     let lastErr = null;
     const urls = T.config.poi.urls;
-    for (let n = 0; n < urls.length; n++) {
+    for (let n = 0; n < urls.length * 2; n++) {
       const i = (n + preferred) % urls.length;
+      // Après un premier tour sans succès : pause (le serveur limite le nombre de requêtes par connexion)
+      if (n === urls.length) await new Promise(r => setTimeout(r, 4000));
+      if (signal && signal.aborted) throw Object.assign(new Error('annulé'), { name: 'AbortError' });
       try {
         const r = await T.util.fetchT(urls[i] + '?data=' + encodeURIComponent(query), { signal }, 10000);
         if (r.ok) { const j = await r.json(); preferred = i; return j; }
@@ -87,7 +90,8 @@ T.providers.poi = (() => {
       done++;
       if (onTile) onTile(done, todo.length);
     };
-    await Promise.all([0, 1].map(async () => { while (next < todo.length) await work(todo[next++]); }));
+    // Une requête à la fois : les serveurs publics limitent les requêtes simultanées par connexion
+    while (next < todo.length) await work(todo[next++]);
     if (todo.length && failed === todo.length) throw lastErr;
     const out = [], seen = new Set();
     keys.forEach(k => cats.forEach(c => (cache.get(k + '|' + c) || []).forEach(it => { if (!seen.has(it.id)) { seen.add(it.id); out.push(it); } })));
