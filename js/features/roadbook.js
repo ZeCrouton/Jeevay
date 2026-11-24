@@ -39,7 +39,7 @@
       `<tr><td class="n">${hm(r.t)}</td><td class="n">km ${U.nf(r.d / 1000)}</td><td>${T.providers.weather.kind(r.w.code)[1]}</td><td class="n">${Math.round(r.w.temp)} °C</td><td class="n">${r.w.rainProb ?? 0} %</td><td class="n">${Math.round(r.w.wind)} / ${Math.round(r.w.gust)} km/h</td></tr>`).join('') : '';
     const pois = T.poi ? T.poi.visible(s).filter(p => ['fuel', 'pass', 'water'].includes(p.cat)).slice(0, 60) : [];
     const css = `@page{size:A4;margin:14mm}*{box-sizing:border-box}body{font:11pt/1.4 Barlow,system-ui,sans-serif;color:#14161b;margin:0 auto;max-width:190mm;padding:12px}
-      h1{font-size:22pt;margin:0 0 2px}h2{font-size:13pt;margin:18px 0 6px;border-bottom:2px solid ${mode.accent};padding-bottom:3px}
+      h1{font-size:22pt;margin:0 0 2px}h2{font-size:13pt;margin:18px 0 6px;border-bottom:2px solid ${T.app.accent()};padding-bottom:3px}
       .sub{color:#5f6672;margin:0 0 10px}.figs{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:10px 0}
       .figs div{border:1px solid #e3e6ea;border-radius:8px;padding:6px 8px}.figs b{display:block;font-size:15pt}.figs span{color:#5f6672;font-size:9pt}
       img{width:100%;border-radius:8px;border:1px solid #e3e6ea;display:block}.prof{margin-top:6px;height:auto}

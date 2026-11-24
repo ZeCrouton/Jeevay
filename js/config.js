@@ -5,7 +5,7 @@ window.T = window.T || {};
 
 T.config = {
   appName: 'Trajecto',
-  version: '1.3.2',
+  version: '1.4.0',
   storagePrefix: 'trajecto.',
 
   map: {
@@ -30,6 +30,9 @@ T.config = {
   poi: { bases: ['https://raw.githubusercontent.com/ZeCrouton/Trajecto/poi-data/poi/', 'https://cdn.jsdelivr.net/gh/ZeCrouton/Trajecto@poi-data/poi/'] },
   // Prévisions météo (Open-Meteo, gratuit, 16 jours)
   weather: { url: 'https://api.open-meteo.com/v1/forecast', days: 16 },
+
+  // Couleurs proposées pour l'appli (toutes lisibles avec du texte blanc)
+  palette: [['#ff4d00', 'Orange'], ['#e03131', 'Rouge'], ['#e3007d', 'Magenta'], ['#7048e8', 'Violet'], ['#1c6fe0', 'Bleu'], ['#0b7285', 'Turquoise'], ['#2b8a3e', 'Vert'], ['#14161b', 'Noir']],
 
   // Vitesses moyennes utilisées pour les tracés importés et les lignes droites (km/h)
   avgSpeed: { moto: 55 },

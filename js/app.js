@@ -2,7 +2,8 @@
 (() => {
   const U = T.util, I = T.icons, S = T.store, E = T.engine, A = T.analysis, M = T.map, UI = T.ui, $ = UI.$;
   const st = () => S.state;
-  const accent = () => T.config.modes[st().mode].accent;
+  // Couleur de l'appli : choix des réglages, sinon celle de l'activité (moto orange, vélo vert, running magenta)
+  const accent = () => { const c = T.settings.get().accent; return /^#[0-9a-f]{6}$/i.test(c || '') ? c : T.config.modes[st().mode].accent; };
 
   // ---------- Actions sur le parcours ----------
   let appendMode = false, lockToast = 0;
@@ -493,6 +494,7 @@
         <label class="field"><span>Allure de course (min:s par km)</span><input id="set-pace" value="${pace}" inputmode="numeric" placeholder="6:00"></label>
         <label class="field"><span>Autonomie de la moto (km, pour l’alerte carburant)</span><input id="set-fuel" type="number" min="50" max="900" value="${s.fuelRange}"></label>
         <label class="field"><span>Vitesse moyenne à vélo (km/h)</span><input id="set-bike" type="number" min="8" max="45" value="${s.bikeSpeed}"></label>
+        <fieldset class="radios"><legend>Couleur de l’appli</legend><div class="swatches">${[['auto', 'Automatique : une couleur par activité'], ...T.config.palette].map(([c, n]) => `<label title="${U.esc(n)}"><input type="radio" name="set-accent" value="${c}" aria-label="${U.esc(n)}" ${(s.accent || 'auto') === c ? 'checked' : ''}><i style="--c:${c === 'auto' ? '#ff4d00' : c}" class="${c === 'auto' ? 'sw-auto' : ''}"></i></label>`).join('')}</div></fieldset>
         <label class="field"><span>Fond de carte</span><select id="set-style">${T.config.map.styles.map(x => `<option value="${x.id}" ${x.id === s.mapStyle ? 'selected' : ''}>${x.label}</option>`).join('')}</select></label>
         <p class="muted small">Tout fonctionne gratuitement avec des services ouverts (OpenStreetMap, Valhalla, Open-Meteo, Photon). Vos parcours restent dans votre navigateur. Version ${T.config.version}.</p>`,
       actions: [{ label: 'Annuler' }, {
@@ -501,8 +503,9 @@
           const runPace = m ? U.clamp(+m[1] + (m[2] ? +m[2] / 60 : 0), 2.5, 20) : s.runPace;
           const bikeSpeed = U.clamp(+$('#set-bike', root).value || s.bikeSpeed, 8, 45);
           const style = $('#set-style', root).value;
+          const accentPick = ($('input[name="set-accent"]:checked', root) || {}).value || 'auto';
           const speedChanged = runPace !== s.runPace || bikeSpeed !== s.bikeSpeed;
-          T.settings.set({ snapMain: $('#set-snap', root).checked, runPace, bikeSpeed, mapStyle: style,
+          T.settings.set({ snapMain: $('#set-snap', root).checked, runPace, bikeSpeed, mapStyle: style, accent: accentPick,
             fuelRange: U.clamp(+$('#set-fuel', root).value || s.fuelRange, 50, 900),
             lastRoad: { ...s.lastRoad, [st().mode]: $('#set-road', root).value } });
           M.setStyle(style);
@@ -510,8 +513,14 @@
             S.commit(x => { x.legs = x.legs.map(L => L.kind === 'route' ? E.invalidate(L) : L); });
           } else render();
         }
-      }]
+      }],
+      onClose: render
     });
+    // Aperçu immédiat de la couleur ; « Annuler » ou fermer rétablit la couleur choisie (via render)
+    document.querySelectorAll('input[name="set-accent"]').forEach(r => r.addEventListener('change', () => {
+      const c = /^#/.test(r.value) ? r.value : T.config.modes[st().mode].accent;
+      document.documentElement.style.setProperty('--accent', c);
+    }));
   }
 
   function moreMenu(btn) {

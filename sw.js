@@ -1,5 +1,5 @@
 /* Service worker : l'application s'ouvre même hors connexion (la carte et les calculs, eux, ont besoin d'Internet). */
-const CACHE = 'trajecto-v1.3.2';
+const CACHE = 'trajecto-v1.4.0';
 const SHELL = [
   './',
   'index.html',
