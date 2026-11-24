@@ -107,8 +107,18 @@
 
   function clearAll() {
     if (!st().waypoints.length || guard()) return;
-    S.commit(s => { s.waypoints = []; s.legs = []; s.name = 'Mon parcours'; });
-    UI.toast('Parcours effacé — Ctrl+Z pour annuler');
+    const n = st().waypoints.length;
+    UI.modal({
+      title: 'Tout effacer ?',
+      body: `<p class="muted">Le parcours « ${U.esc(st().name)} » (${n} point${n > 1 ? 's' : ''}) sera effacé. Tu pourras le récupérer avec le bouton Annuler.</p>`,
+      actions: [{ label: 'Garder' }, {
+        label: 'Tout effacer', primary: true, danger: true, onClick: () => {
+          if (guard()) return;
+          S.commit(s => { s.waypoints = []; s.legs = []; s.name = 'Mon parcours'; });
+          UI.toast('Parcours effacé : touche Annuler pour le récupérer');
+        }
+      }]
+    });
   }
 
   function addItems(items, { replace, connect }) {
