@@ -45,6 +45,8 @@
     <button class="tool" data-act="style" data-icon="layers" title="Changer de fond de carte" aria-label="Changer de fond de carte"></button>
     <button class="tool" data-act="locate" data-icon="locate" title="Me localiser" aria-label="Me localiser"></button>
     <button class="tool" id="tool-lock" data-act="lock" data-icon="unlock" title="Verrouiller le tracé (évite les modifications involontaires)" aria-label="Verrouiller le tracé" aria-pressed="false"></button>
+    <button class="tool" id="tool-play" data-act="play" data-icon="play" title="Parcourir le tracé du début à la fin (pause, reprise, recommencer)" aria-label="Parcourir le tracé" aria-pressed="false"></button>
+    <button class="tool" id="tool-nums" data-act="nums" data-icon="hash" title="Afficher ou masquer les numéros des points" aria-label="Numéros des points" aria-pressed="true"></button>
     <button class="tool" data-act="help" data-icon="help" title="Aide : à quoi servent les boutons" aria-label="Aide"></button>
   </div>
   <div id="slope-legend" class="slope-legend" hidden></div>
@@ -101,6 +103,7 @@
 <script src="js/features/score.js"></script>
 <script src="js/features/poi.js"></script>
 <script src="js/features/sync.js"></script>
+<script src="js/features/playback.js"></script>
 <script src="js/features/weather.js"></script>
 <script src="js/features/share.js"></script>
 <script src="js/features/loop.js"></script>
