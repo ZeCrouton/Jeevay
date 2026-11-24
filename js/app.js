@@ -332,7 +332,7 @@
     }
     $('#tool-slope').setAttribute('aria-pressed', String(T.settings.get().colorBy === 'slope'));
     const lg = $('#slope-legend'), bySlope = T.settings.get().colorBy === 'slope';
-    lg.hidden = !A.combine(s).coords.length;
+    lg.hidden = !(bySlope && A.combine(s).coords.length);   // légende affichée seulement quand la couleur par pente est active
     lg.innerHTML = bySlope
       ? '<b>Pente</b>' + T.config.slopeColors.map((c, k) => `<span><i style="background:${c}"></i>${T.config.slopeLabels[k]}</span>`).join('')
       : '<b>Pente</b>' + [0, 2, 4].map(k => `<span><i class="sh">${['#1f5fbf', '#d7261e', '#f5c400'].map(c => `<em style="background:${shade(c, k)}"></em>`).join('')}</i>${['plat', 'moyenne', 'raide'][k / 2]}</span>`).join('');
