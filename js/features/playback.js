@@ -38,7 +38,11 @@
     dot.setLngLat(p);
     if (follow) T.map.raw.jumpTo({ center: p });
     $('input').value = String(Math.round(d / comb.total * 1000));
-    $('.pl-info').textContent = `km ${U.nf(d / 1000, 1)} / ${U.nf(comb.total / 1000, 1)}${e != null ? ' · ' + U.nf(e) + ' m' : ''}`;
+    const done = d >= comb.total ? comb.total : d;
+    $('.pl-done').textContent = U.nf(done / 1000, 1) + ' km';
+    $('.pl-left').textContent = U.nf(Math.max(0, comb.total - done) / 1000, 1) + ' km';
+    $('.pl-ele').textContent = e != null ? U.nf(e) + ' m' : '';
+    $('.pl-bar').style.setProperty('--p', (done / comb.total * 100).toFixed(2) + '%');
   }
 
   function labels() {
@@ -91,9 +95,14 @@
         <button class="icon-btn" data-p="restart" aria-label="Recommencer du début" title="Recommencer du début">${I('restart')}</button>
         <button class="icon-btn pl-main" data-p="play"></button>
         <button class="icon-btn pl-speed" data-p="speed" aria-label="Vitesse" title="Vitesse">x${SPEEDS[sp]}</button>
-        <span class="pl-info"></span>
+        <span class="pl-info" aria-live="off"><b class="pl-ele"></b></span>
         <button class="icon-btn pl-follow" data-p="follow" aria-label="Recentrer sur le point" title="Recentrer sur le point" hidden>${I('locate')}</button>
         <button class="icon-btn" data-p="stop" aria-label="Fermer" title="Fermer">${I('close')}</button>
+      </div>
+      <div class="pl-stats">
+        <div><small>Parcouru</small><b class="pl-done"></b></div>
+        <div class="pl-bar" aria-hidden="true"><i></i></div>
+        <div class="r"><small>Reste jusqu’à l’arrivée</small><b class="pl-left"></b></div>
       </div>
       <input type="range" min="0" max="1000" value="0" aria-label="Position sur le parcours">`;
     document.getElementById('app').appendChild(bar);

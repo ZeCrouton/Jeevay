@@ -433,3 +433,13 @@ textarea { resize: vertical; font-family: var(--num); }
 
 /* Point de lecture : marqueur DOM, ne gêne pas les clics sur la carte */
 .pl-dot { width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 5px solid var(--accent); box-shadow: 0 0 0 3px rgba(255,255,255,.7), 0 2px 8px rgba(0,0,0,.45); pointer-events: none; }
+
+/* Lecteur : kilométrage parcouru / restant */
+.pl-stats { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.pl-stats > div:not(.pl-bar) { display: flex; flex-direction: column; line-height: 1.15; }
+.pl-stats .r { text-align: right; }
+.pl-stats small { font-size: 11px; color: var(--muted); }
+.pl-stats b { font: 700 17px var(--num); color: var(--ink); }
+.pl-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--panel-2); position: relative; overflow: hidden; align-self: center; }
+.pl-bar i { position: absolute; inset: 0 auto 0 0; width: var(--p, 0%); background: var(--accent); border-radius: 3px; }
+.pl-info b { font: 600 13px var(--num); color: var(--muted); }
