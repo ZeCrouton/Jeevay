@@ -2,12 +2,13 @@
    Chargement automatique de la zone affichée (rapide), ou de tout le parcours à la demande. */
 (() => {
   const U = T.util, I = T.icons, P = T.providers.poi;
-  // items : lieux projetés sur le parcours en cours ; route : cases traversées
-  let data = { sig: null, mode: null, route: [], items: [], loading: false, progress: '', error: null, zoomHint: false };
-  let ctrl = null, showAll = false, projCache = { key: '', items: [] };
+  // items : lieux projetés sur le parcours en cours ; key : clé du tracé (une requête couloir par tracé)
+  let data = { sig: null, mode: null, key: null, items: [], loading: false, error: false };
+  let ctrl = null, timer = 0, showAll = false, projCache = { key: '', items: [] }, coords = [];
 
   const sigOf = s => s.legs.map(l => l.id + ':' + l.rev + ':' + l.status).join('|');
   const catsFor = mode => T.settings.get().poiCats[mode] || P.BY_MODE[mode].on;
+  const ready = s => s.legs.length && s.legs.every(l => l.status !== 'pending');
 
   function project(raw, comb) {
     const { pts } = U.resample(comb.coords, Math.max(80, comb.total / 6000));
@@ -24,55 +25,37 @@
     return items.sort((x, y) => x.d - y.d);
   }
 
-  // Met à jour la liste à partir de ce qui est déjà en mémoire
+  // Met à jour la liste à partir de ce qui est déjà en mémoire ; programme le chargement si besoin
   function refresh(s, comb) {
     const sig = sigOf(s);
     if (data.sig !== sig || data.mode !== s.mode) {
-      data = { ...data, sig, mode: s.mode, route: comb.coords.length > 1 ? P.tiles(comb.coords) : [], error: null };
+      coords = comb.coords;
+      data = { ...data, sig, mode: s.mode, key: comb.coords.length > 1 ? P.key(comb.coords) : null, error: false };
       showAll = false;
+      schedule(s);
     }
-    const cats = P.BY_MODE[s.mode].all, raw = P.collect(data.route, cats);
+    const raw = data.key ? P.collect(data.key, P.BY_MODE[s.mode].all) : [];
     const k = sig + '#' + raw.length;
-    if (projCache.key !== k) projCache = { key: k, items: comb.coords.length > 1 ? project(raw, comb) : [] };
+    if (projCache.key !== k) projCache = { key: k, items: raw.length ? project(raw, comb) : [] };
     data.items = projCache.items;
   }
 
-  async function fetchTiles(keys, cats, label) {
-    if (!keys.length || P.cached(keys, cats)) { T.app.render(); return; }
-    if (ctrl) ctrl.abort();
+  // Attend que le tracé ne bouge plus, puis une seule requête pour tout le parcours
+  function schedule(s, now) {
+    clearTimeout(timer);
+    if (ctrl) { ctrl.abort(); ctrl = null; data.loading = false; }
+    if (!data.key || !ready(s) || P.cached(data.key, catsFor(s.mode))) return;
+    timer = setTimeout(load, now ? 0 : 1200);
+  }
+
+  async function load() {
+    const s = T.app.st(), k = data.key, cats = catsFor(s.mode);
+    if (!k || P.cached(k, cats)) return;
     const my = ctrl = new AbortController();
-    data = { ...data, loading: true, progress: '', error: null, label };
-    T.app.render();
-    try {
-      const r = await P.load(keys, cats, my.signal, (d, n) => { if (my === ctrl) { data.progress = n > 1 ? `${d}/${n}` : ''; T.app.render(); } });
-      if (r.partial) data.error = 'Une partie n’a pas pu être chargée (serveur saturé) : réessayez dans un moment.';
-    } catch (e) {
-      if (my.signal.aborted) return;
-      data.error = e.message;
-    }
-    if (my === ctrl) { data.loading = false; data.progress = ''; T.app.render(); }
-  }
-
-  // Zone affichée : seulement les cases du parcours visibles à l'écran
-  let viewTimer = 0;
-  function onView() {
-    clearTimeout(viewTimer);
-    viewTimer = setTimeout(() => {
-      const s = T.app.st(), map = T.map.raw;
-      if (!map || !data.route.length) return;
-      const z = map.getZoom(), b = map.getBounds();
-      const keys = P.inView(data.route, [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
-      const hint = z < 9.5 || keys.length > 16;
-      if (hint !== data.zoomHint) { data.zoomHint = hint; T.app.render(); }
-      if (hint || !keys.length) return;
-      fetchTiles(keys, catsFor(s.mode), 'zone');
-    }, 700);
-  }
-
-  function wholeRoute(cats) {
-    const s = T.app.st();
-    if (!data.route.length) { T.ui.toast('Tracez d’abord un parcours', 'error'); return; }
-    fetchTiles(data.route, cats || catsFor(s.mode), 'all');
+    data.loading = true; data.error = false; T.app.render();
+    try { await P.load(coords, k, cats, my.signal); }
+    catch (e) { if (my.signal.aborted) return; data.error = true; }
+    if (my === ctrl) { ctrl = null; data.loading = false; T.app.render(); }
   }
 
   function toggleCat(k) {
@@ -80,7 +63,7 @@
     if (cur.has(k)) cur.delete(k); else cur.add(k);
     T.settings.set({ poiCats: { ...T.settings.get().poiCats, [s.mode]: [...cur] } });
     T.app.render();
-    if (cur.has(k)) onView();
+    if (cur.has(k)) schedule(s, true);
   }
 
   function visible(s) {
@@ -132,7 +115,7 @@
 
   // Alerte : distance maximale sans station-service (moto), quand tout le parcours est chargé
   T.hooks.alerts.push((s, sum, comb) => {
-    if (s.mode !== 'moto' || !comb.total || !data.route.length || data.sig !== sigOf(s) || !P.cached(data.route, ['fuel'])) return;
+    if (s.mode !== 'moto' || !comb.total || !data.key || data.sig !== sigOf(s) || !P.cached(data.key, ['fuel'])) return;
     const range = T.settings.get().fuelRange * 1000;
     const marks = [0, ...data.items.filter(i => i.cat === 'fuel').map(i => i.d), comb.total];
     let gap = 0, at = 0;
@@ -145,36 +128,25 @@
   T.hooks.render.push((s, sum, comb) => {
     const el = document.getElementById('pois');
     if (!el) return;
-    if (comb.coords.length < 2) { el.innerHTML = ''; T.map.setPois([]); data.route = []; return; }
-    const before = data.sig;
+    if (comb.coords.length < 2) { el.innerHTML = ''; T.map.setPois([]); data.key = null; data.sig = null; return; }
     refresh(s, comb);
-    if (before !== data.sig) onView();
     const list = visible(s), all = P.BY_MODE[s.mode].all, on = new Set(catsFor(s.mode));
     const counts = {};
     data.items.forEach(i => { counts[i.cat] = (counts[i.cat] || 0) + 1; });
-    const allDone = P.cached(data.route, [...on]);
-    const fuelDone = s.mode !== 'moto' || P.cached(data.route, ['fuel']);
-    const status = data.loading
-      ? `<span class="calc"><i class="spin"></i>${data.label === 'all' ? 'Tout le parcours' : 'Zone affichée'} ${data.progress}</span>`
-      : !allDone ? `<button class="mini" data-act="poiAll">${I('route')}Tout le parcours</button>` : '';
+    const status = data.loading ? '<span class="calc"><i class="spin"></i>Recherche…</span>'
+      : data.error ? `<button class="mini" data-act="poiRetry">${I('retry')}Réessayer</button>` : '';
     const rows = list.slice(0, showAll ? 500 : 25);
     el.innerHTML = `<div class="sec-h"><h3>Sur le parcours</h3>${status}</div>
       <div class="cats">${all.map(k => `<button class="cat${on.has(k) ? ' on' : ''}" data-act="poiCat" data-k="${k}" style="--c:${P.CATS[k].color}"><i></i>${P.CATS[k].label}${counts[k] ? `<b>${counts[k]}</b>` : ''}</button>`).join('')}</div>
-      ${data.error ? `<p class="err">${U.esc(data.error)}</p>` : ''}
-      ${data.zoomHint && !allDone ? '<p class="muted small">Zoomez sur le parcours pour afficher les lieux de la zone, ou chargez tout le parcours.</p>' : ''}
-      ${!fuelDone && !data.loading ? '<p class="muted small">Alerte carburant : chargez « Tout le parcours » pour vérifier l’autonomie.</p>' : ''}
+      ${data.error ? '<p class="muted small">Lieux momentanément indisponibles (serveurs gratuits occupés).</p>' : ''}
+      ${!data.loading && !data.error && P.cached(data.key, [...on]) && !list.length ? '<p class="muted small">Aucun lieu de ces catégories près du parcours.</p>' : ''}
       ${rows.length ? `<ul class="pois">${rows.map(it => `<li><button data-act="poiGo" data-id="${it.id}"><i class="dot" style="background:${P.CATS[it.cat].color}"></i><span class="pn">${U.esc(it.name)}</span><span class="pk">km ${U.nf(it.d / 1000, 1)}</span></button></li>`).join('')}</ul>` : ''}
       ${list.length > rows.length ? `<button class="mini" data-act="poiMore">Voir les ${list.length} lieux</button>` : ''}`;
     T.map.setPois(list.map(it => ({ type: 'Feature', geometry: { type: 'Point', coordinates: it.c }, properties: { id: it.id, color: P.CATS[it.cat].color } })));
   });
 
-  T.hooks.init.push(() => {
-    const map = T.map.raw;
-    if (map) map.on('moveend', onView);
-  });
-
   Object.assign(T.hooks.act, {
-    poiAll: () => wholeRoute(),
+    poiRetry: () => schedule(T.app.st(), true),
     poiCat: el => toggleCat(el.dataset.k),
     poiMore: () => { showAll = true; T.app.render(); },
     poiGo: el => {

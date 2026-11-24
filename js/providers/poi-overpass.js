@@ -1,7 +1,9 @@
 /* Fournisseur de points d'intérêt : Overpass (données OpenStreetMap, gratuit, sans clé).
-   Les recherches se font par petites cases fixes (0,15°), gardées en mémoire : rapide, léger pour le serveur,
-   et on ne redemande jamais une case déjà chargée.
-   Interface : tiles(coords) -> clés des cases traversées ; load(keys, cats, signal, onTile) -> [{ id, cat, name, c, tags }] */
+   Une seule requête « couloir » le long du tracé simplifié (filtre around sur une ligne) :
+   le serveur ne cherche que près du parcours, quelle que soit sa longueur.
+   Plusieurs serveurs en relais (le suivant démarre si le premier tarde), résultats gardés en mémoire
+   et dans le navigateur.
+   Interface : key(coords) -> clé du tracé ; load(coords, key, cats, signal) -> { items } ; collect(key, cats) ; cached(key, cats) */
 window.T = window.T || {};
 T.providers = T.providers || {};
 
@@ -20,91 +22,88 @@ T.providers.poi = (() => {
     velo: { all: ['water', 'pass', 'view', 'food', 'bike', 'wc'], on: ['water', 'pass', 'bike'] },
     run: { all: ['water', 'wc', 'view', 'pass'], on: ['water', 'wc'] }
   };
-  const SIZE = 0.2;
+  const MAX_PTS = 180, LS = 'trajecto.poi.v2', LS_MAX = 12;
 
-  function label(t, cat) {
-    return t.name || t.brand || t.operator || CATS[cat].label.replace(/s$/, '').replace(/s et /, ' / ');
+  const label = (t, cat) => t.name || t.brand || t.operator || CATS[cat].label.replace(/s$/, '').replace(/s et /, ' / ');
+
+  // Ligne simplifiée (au plus MAX_PTS points) et tolérance utilisée
+  // (on resimplifie le résultat précédent : l'écart au tracé reste inférieur à la somme des tolérances)
+  let memo = { c: null, v: null };
+  function line(coords) {
+    if (memo.c === coords) return memo.v;
+    let t = 40, sum = 40, pts = T.util.simplify(coords, t);
+    while (pts.length > MAX_PTS) { t *= 1.6; sum += t; pts = T.util.simplify(pts, t); }
+    memo = { c: coords, v: { pts, tol: sum } };
+    return memo.v;
+  }
+  function key(coords) {
+    const s = line(coords).pts.map(c => c[1].toFixed(4) + ',' + c[0].toFixed(4)).join(';');
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return (h >>> 0).toString(36) + ':' + coords.length;
   }
 
-  const key = (x, y) => x + ':' + y;
-  // Cases traversées par le parcours (et leurs voisines quand le tracé passe près d'un bord)
-  function tiles(coords) {
-    const set = new Set(), m = 1300 / 111000;
-    T.util.resample(coords, 400).pts.forEach(({ c }) => {
-      const mx = m / Math.max(0.2, Math.cos(c[1] * Math.PI / 180));
-      for (const dx of [-mx, 0, mx]) for (const dy of [-m, 0, m]) set.add(key(Math.floor((c[0] + dx) / SIZE), Math.floor((c[1] + dy) / SIZE)));
-    });
-    return [...set];
-  }
-  function inView(keys, b) { // b = [ouest, sud, est, nord]
-    return keys.filter(k => {
-      const [x, y] = k.split(':').map(Number);
-      return x * SIZE < b[2] && (x + 1) * SIZE > b[0] && y * SIZE < b[3] && (y + 1) * SIZE > b[1];
-    });
+  // Mémoire : clé du tracé|catégorie -> éléments (copie des derniers parcours dans le navigateur)
+  const cache = new Map();
+  try { (JSON.parse(localStorage.getItem(LS)) || []).forEach(([k, v]) => cache.set(k, v)); } catch (e) { /* stockage indisponible */ }
+  function persist() {
+    try { localStorage.setItem(LS, JSON.stringify([...cache].slice(-LS_MAX * 4))); } catch (e) { /* plein ou indisponible */ }
   }
 
-  const cache = new Map(); // case|catégorie -> éléments
   let preferred = 0;
+  // Relais : le serveur préféré d'abord, le suivant s'il ne répond pas vite ; la première réponse valable gagne
+  function query(body, signal) {
+    const urls = T.config.poi.urls, delays = [0, 2500, 6000];
+    return new Promise((resolve, reject) => {
+      const ctrls = [], timers = [];
+      let left = urls.length, done = false, lastErr = null;
+      const stop = () => { done = true; timers.forEach(clearTimeout); ctrls.forEach(c => c.abort()); };
+      if (signal) signal.addEventListener('abort', () => { stop(); reject(Object.assign(new Error('annulé'), { name: 'AbortError' })); }, { once: true });
+      const fail = e => { lastErr = e; if (--left === 0 && !done) { done = true; reject(lastErr); } };
+      urls.forEach((_, n) => {
+        const i = (n + preferred) % urls.length;
+        timers.push(setTimeout(async () => {
+          if (done) { left--; return; }
+          const c = new AbortController(); ctrls.push(c);
+          try {
+            const r = await T.util.fetchT(urls[i], { method: 'POST', body: 'data=' + encodeURIComponent(body),
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: c.signal }, 30000);
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const j = await r.json();
+            if (done) return;
+            if (j.remark && /runtime error|timed out|out of memory/i.test(j.remark) && !(j.elements || []).length) throw new Error(j.remark);
+            preferred = i; stop(); resolve(j);
+          } catch (e) { if (!done) fail(e); }
+        }, delays[n] ?? n * 5000));
+      });
+    });
+  }
 
-  async function get(query, signal) {
-    let lastErr = null;
-    const urls = T.config.poi.urls;
-    for (let n = 0; n < urls.length * 2; n++) {
-      const i = (n + preferred) % urls.length;
-      // Après un premier tour sans succès : pause (le serveur limite le nombre de requêtes par connexion)
-      if (n === urls.length) await new Promise(r => setTimeout(r, 4000));
-      if (signal && signal.aborted) throw Object.assign(new Error('annulé'), { name: 'AbortError' });
-      try {
-        const r = await T.util.fetchT(urls[i] + '?data=' + encodeURIComponent(query), { signal }, 10000);
-        if (r.ok) { const j = await r.json(); preferred = i; return j; }
-        lastErr = new Error(r.status === 429 || r.status === 504 ? 'Serveurs de points d’intérêt saturés, réessayez dans une minute' : 'Points d’intérêt indisponibles (' + r.status + ')');
-      } catch (e) {
-        if (signal && signal.aborted) throw e;
-        lastErr = new Error('Serveurs de points d’intérêt injoignables pour le moment');
+  async function load(coords, k, cats, signal) {
+    const miss = cats.filter(c => !cache.has(k + '|' + c));
+    if (miss.length) {
+      const { pts, tol } = line(coords);
+      const poly = pts.map(c => c[1].toFixed(5) + ',' + c[0].toFixed(5)).join(',');
+      const sel = miss.flatMap(c => CATS[c].q.map(q => `${q}(around:${Math.round(CATS[c].radius + tol)},${poly});`)).join('');
+      const j = await query(`[out:json][timeout:25];(${sel});out center tags 3000;`, signal);
+      const per = Object.fromEntries(miss.map(c => [c, []]));
+      for (const el of j.elements || []) {
+        const tg = el.tags || {}, cat = miss.find(c => CATS[c].test(tg));
+        const lat = el.lat ?? (el.center && el.center.lat), lon = el.lon ?? (el.center && el.center.lon);
+        if (cat && lat != null) per[cat].push({ id: el.type[0] + el.id, cat, name: label(tg, cat), c: [lon, lat], tags: tg });
       }
+      miss.forEach(c => { cache.delete(k + '|' + c); cache.set(k + '|' + c, per[c]); });
+      persist();
     }
-    throw lastErr;
+    return collect(k, cats);
   }
 
-  // Charge les catégories demandées dans les cases données ; onTile(fait, total) à chaque case
-  async function load(keys, cats, signal, onTile) {
-    const todo = keys.map(k => ({ k, miss: cats.filter(c => !cache.has(k + '|' + c)) })).filter(t => t.miss.length);
-    let done = 0, failed = 0, lastErr = null, next = 0;
-    const work = async t => {
-      const [x, y] = t.k.split(':').map(Number);
-      const bb = [y * SIZE, x * SIZE, (y + 1) * SIZE, (x + 1) * SIZE].map(v => v.toFixed(3)).join(',');
-      const sel = t.miss.flatMap(c => CATS[c].q).map(q => q + ';').join('');
-      try {
-        const j = await get(`[out:json][timeout:20][bbox:${bb}];(${sel});out center tags 800;`, signal);
-        const per = Object.fromEntries(t.miss.map(c => [c, []]));
-        for (const el of j.elements || []) {
-          const tg = el.tags || {}, cat = t.miss.find(c => CATS[c].test(tg));
-          const lat = el.lat ?? (el.center && el.center.lat), lon = el.lon ?? (el.center && el.center.lon);
-          if (cat && lat != null) per[cat].push({ id: el.type[0] + el.id, cat, name: label(tg, cat), c: [lon, lat], tags: tg });
-        }
-        t.miss.forEach(c => cache.set(t.k + '|' + c, per[c]));
-      } catch (e) {
-        if (signal && signal.aborted) throw e;
-        failed++; lastErr = e;
-      }
-      done++;
-      if (onTile) onTile(done, todo.length);
-    };
-    // Une requête à la fois : les serveurs publics limitent les requêtes simultanées par connexion
-    while (next < todo.length) await work(todo[next++]);
-    if (todo.length && failed === todo.length) throw lastErr;
+  const cached = (k, cats) => cats.every(c => cache.has(k + '|' + c));
+  function collect(k, cats) {
     const out = [], seen = new Set();
-    keys.forEach(k => cats.forEach(c => (cache.get(k + '|' + c) || []).forEach(it => { if (!seen.has(it.id)) { seen.add(it.id); out.push(it); } })));
-    return { items: out, partial: failed > 0, missing: failed };
-  }
-
-  const cached = (keys, cats) => keys.every(k => cats.every(c => cache.has(k + '|' + c)));
-  // Lieux déjà en mémoire pour ces cases (sans rien télécharger)
-  function collect(keys, cats) {
-    const out = [], seen = new Set();
-    keys.forEach(k => cats.forEach(c => (cache.get(k + '|' + c) || []).forEach(it => { if (!seen.has(it.id)) { seen.add(it.id); out.push(it); } })));
+    cats.forEach(c => (cache.get(k + '|' + c) || []).forEach(it => { if (!seen.has(it.id)) { seen.add(it.id); out.push(it); } }));
     return out;
   }
 
-  return { CATS, BY_MODE, tiles, inView, load, cached, collect };
+  return { CATS, BY_MODE, key, load, cached, collect };
 })();
