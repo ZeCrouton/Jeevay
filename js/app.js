@@ -24,10 +24,14 @@
 
   // Recale le point sur la voie principale la plus proche (l'utilisateur peut ensuite le déplacer)
   async function snapPoint(id, c) {
-    const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), 3000);
-    let p = null;
-    try { p = await T.providers.routing.snap(c, st().mode, 90, ctrl.signal); } catch (e) { /* on garde le point tel quel */ }
-    clearTimeout(t);
+    let p = null, failed = false;
+    for (let k = 0; k < 2 && !p; k++) {   // 2 essais de 5 s : le serveur public est parfois lent
+      const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), 5000);
+      try { p = await T.providers.routing.snap(c, st().mode, 90, ctrl.signal); failed = false; break; } catch (e) { failed = true; }
+      finally { clearTimeout(t); }
+      const w0 = st().waypoints.find(x => x.id === id); if (!w0 || !U.same(w0.c, c)) return;
+    }
+    if (failed) UI.toast('Point non recalé sur la route (serveur lent) : posé tel quel', 'info', 2500);
     const w = st().waypoints.find(x => x.id === id);
     if (!w || !U.same(w.c, c)) return;
     S.amend(s => { s.waypoints = s.waypoints.map(x => x.id === id ? { ...x, c: p || c, snapping: undefined } : x); });
