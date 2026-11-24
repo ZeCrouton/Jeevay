@@ -331,6 +331,7 @@
       $('#app').classList.toggle('trace-locked', S.locked);
     }
     $('#tool-slope').setAttribute('aria-pressed', String(T.settings.get().colorBy === 'slope'));
+    $('#calc').hidden = !s.legs.some(l => l.status === 'pending');   // jauge : routes en cours de calcul
     const lg = $('#slope-legend'), bySlope = T.settings.get().colorBy === 'slope';
     lg.hidden = !(bySlope && A.combine(s).coords.length);   // légende affichée seulement quand la couleur par pente est active
     lg.innerHTML = bySlope
