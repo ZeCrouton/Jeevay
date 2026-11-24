@@ -1,4 +1,5 @@
 /* Fournisseur de recherche de lieux : Photon (Komoot, gratuit, sans clé).
+   Pas de priorité à la zone affichée : « Paris » donne Paris, où que soit la carte.
    Interface : search(text, near, signal) -> [{ label, sub, c:[lng,lat] }]
                reverse(c) -> nom court | null */
 window.T = window.T || {};
@@ -19,7 +20,6 @@ T.providers.geocode = (() => {
 
   async function photon(q, near, signal) {
     let url = `${base()}/api/?q=${encodeURIComponent(q)}&limit=6&lang=fr`;
-    if (near) url += `&lat=${near[1].toFixed(4)}&lon=${near[0].toFixed(4)}`;
     const r = await T.util.fetchT(url, { signal }, 6000);
     if (!r.ok) throw new Error('Photon ' + r.status);
     const j = await r.json();
@@ -31,10 +31,6 @@ T.providers.geocode = (() => {
 
   async function nominatim(q, near, signal) {
     let url = `${T.config.geocode.fallback}/search?q=${encodeURIComponent(q)}&format=jsonv2&limit=6&accept-language=fr&addressdetails=1`;
-    if (near) {
-      const d = 1.5;
-      url += `&viewbox=${(near[0] - d).toFixed(3)},${(near[1] + d).toFixed(3)},${(near[0] + d).toFixed(3)},${(near[1] - d).toFixed(3)}`;
-    }
     const r = await T.util.fetchT(url, { signal }, 8000);
     if (!r.ok) throw new Error('Nominatim ' + r.status);
     const j = await r.json();
