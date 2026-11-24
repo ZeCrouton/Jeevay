@@ -322,8 +322,11 @@
     if (document.activeElement !== nm) nm.value = s.name;
     $('[data-act="undo"]').disabled = S.locked || !S.canUndo();
     $('[data-act="redo"]').disabled = S.locked || !S.canRedo();
-    const nums = T.settings.get().showNums !== false;
-    $('#app').classList.toggle('hide-nums', !nums); $('#tool-nums').setAttribute('aria-pressed', String(nums));
+    const numMode = ['num', 'dot', 'off'].includes(T.settings.get().nums) ? T.settings.get().nums : 'num';
+    $('#app').classList.toggle('hide-nums', numMode === 'dot'); $('#app').classList.toggle('nums-off', numMode === 'off');
+    const nb = $('#tool-nums'), lab = { num: 'Points numérotés', dot: 'Points sans numéro', off: 'Tracé seul (points masqués)' }[numMode];
+    if (nb.dataset.m !== numMode) { nb.dataset.m = numMode; nb.innerHTML = I({ num: 'hash', dot: 'dots', off: 'hashoff' }[numMode]); }
+    nb.title = lab + ' — toucher pour changer'; nb.setAttribute('aria-label', lab);
     const lk = $('#tool-lock');
     if (lk.getAttribute('aria-pressed') !== String(S.locked)) {
       lk.setAttribute('aria-pressed', String(S.locked));
@@ -574,7 +577,7 @@
       ['Carte', [['undo', 'Annuler', 'Annule la dernière modification (Ctrl+Z).'], ['redo', 'Rétablir', 'Rétablit ce que vous venez d’annuler (Ctrl+Y).'],
         ['fit', 'Voir tout le parcours', 'Cadre la carte sur l’ensemble du tracé.'], ['append', 'Ajouter à la fin', 'Chaque clic ajoute un point au bout du parcours, même sur le tracé (utile pour un aller-retour).'],
         ['slope', 'Pente', 'Colore le tracé selon la pente.'], ['layers', 'Fond de carte', 'Change l’aspect de la carte.'], ['locate', 'Me localiser', 'Centre la carte sur votre position.'],
-        ['play', 'Parcourir le tracé', 'Un point se déplace sur le tracé du début à la fin : pause, reprise, vitesse, recommencer, ou faites glisser la barre.'], ['hash', 'Numéros des points', 'Affiche ou masque les numéros sur les points du tracé.'], ['lock', 'Verrouiller', 'Empêche toute modification du tracé par erreur.'], ['help', 'Aide', 'Affiche cette page.']]],
+        ['play', 'Parcourir le tracé', 'Un point se déplace sur le tracé du début à la fin : pause, reprise, vitesse, recommencer, ou faites glisser la barre.'], ['hash', 'Points du tracé', 'Chaque appui change l’affichage : points numérotés, points sans numéro, puis tracé seul (aucun point).'], ['lock', 'Verrouiller', 'Empêche toute modification du tracé par erreur.'], ['help', 'Aide', 'Affiche cette page.']]],
       ['Panneau du parcours', [['download', 'Importer', 'Ouvre un fichier GPX pour le charger sur la carte.'], ['link', 'Partager', 'Crée un lien vers votre parcours.'],
         ['upload', 'Exporter GPX', 'Enregistre le parcours en fichier GPX pour votre GPS ou votre montre.'], ['more', 'Plus d’options', 'Mes parcours, boucle, road-book, inverser le sens, Google Maps, réglages, tout effacer.'], ['link', 'Retrouver mes parcours (code)', 'Crée un code personnel pour retrouver vos parcours enregistrés sur un autre appareil. Gardez-le secret : il donne accès à vos parcours.']]]
     ];
@@ -612,7 +615,7 @@
   function act(a, el) {
     const i = el && el.dataset.i != null ? +el.dataset.i : null;
     switch (a) {
-      case 'nums': T.settings.set({ showNums: T.settings.get().showNums === false }); render(); break;
+      case 'nums': { const o = ['num', 'dot', 'off'], c = o.indexOf(T.settings.get().nums); T.settings.set({ nums: o[(c + 1) % 3] }); render(); UI.toast({ num: 'Points numérotés', dot: 'Points sans numéro', off: 'Tracé seul' }[T.settings.get().nums], 'info', 1200); break; }
       case 'help': helpDialog(); break;
       case 'sync': syncDialog(); break;
       case 'lock': {

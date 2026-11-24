@@ -15,6 +15,8 @@ T.icons = (() => {
     play: '<path d="M7 4.5v15l12-7.5-12-7.5Z"/>',
     pause: '<path d="M8 5v14M16 5v14"/>',
     restart: '<path d="M5 4v6h6"/><path d="M5.6 15a7.5 7.5 0 1 0 1.2-7.8L5 10"/>',
+    dots: '<circle cx="6" cy="12" r="2.2"/><circle cx="12" cy="12" r="2.2"/><circle cx="18" cy="12" r="2.2"/>',
+    hashoff: '<path d="M9 4 7 20M17 4l-2 16M4.5 9h16M3.5 15h16" opacity=".35"/><path d="m4 4 16 16"/>',
     hash: '<path d="M9 4 7 20M17 4l-2 16M4.5 9h16M3.5 15h16"/>',
     lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
     unlock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-1.5"/>',

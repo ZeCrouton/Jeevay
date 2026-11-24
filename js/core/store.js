@@ -3,7 +3,7 @@ window.T = window.T || {};
 
 T.settings = (() => {
   const KEY = T.config.storagePrefix + 'settings';
-  const def = { snapMain: true, lastRoad: {}, runPace: 6, bikeSpeed: 22, autoConnect: true, mapStyle: 'liberty', colorBy: 'road', showNums: true, fuelRange: 200, poiCats: {} };
+  const def = { snapMain: true, lastRoad: {}, runPace: 6, bikeSpeed: 22, autoConnect: true, mapStyle: 'liberty', colorBy: 'road', nums: 'num', fuelRange: 200, poiCats: {} };
   const s = { ...def };
   try { Object.assign(s, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* stockage indisponible */ }
   // v1.1 : la préférence par défaut devient « proposé par l'app »

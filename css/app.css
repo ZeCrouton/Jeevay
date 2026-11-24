@@ -425,3 +425,4 @@ textarea { resize: vertical; font-family: var(--num); }
 .pl-speed { font: 700 13px var(--num); width: auto; padding: 0 8px; }
 .player input[type=range] { width: 100%; margin: 6px 0 0; accent-color: var(--accent); }
 @media (max-width: 760px) { .player { left: 12px; right: 12px; width: auto; bottom: calc(var(--peek) + 12px); } }
+#app.nums-off .wp { display: none; }

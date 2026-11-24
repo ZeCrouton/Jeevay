@@ -1,8 +1,9 @@
 /* Jeevay — lecture du parcours : un point se déplace sur le tracé, du début à la fin (pause, reprise, recommencer). */
 (() => {
   const U = T.util, A = T.analysis, I = T.icons;
-  const SPEEDS = [1, 2, 4, 8], BASE = 45;   // x1 : le parcours entier en 45 s
-  let bar = null, d = 0, playing = false, raf = 0, t0 = 0, sp = 0, comb = null, zoomed = false;
+  const SPEEDS = [0.5, 1, 2, 4];   // x1 : lent pour bien voir le cheminement (de 1 min 30 à 7 min selon la longueur)
+  const base = () => U.clamp(comb.total / 12, 90, 420);   // secondes pour parcourir le tracé à x1
+  let bar = null, d = 0, playing = false, raf = 0, t0 = 0, sp = 1, comb = null, zoomed = false;
 
   const pos = c => {
     const i = Math.min(U.search(c.cum, d), c.coords.length - 2);
@@ -23,7 +24,7 @@
   function btn() { bar.querySelector('[data-p=play]').innerHTML = I(playing ? 'pause' : 'play'); bar.querySelector('[data-p=play]').setAttribute('aria-label', playing ? 'Pause' : d > 0 && d < comb.total ? 'Reprendre' : 'Lancer'); }
   function frame(t) {
     if (!playing) return;
-    d = Math.min(comb.total, d + (t - t0) / 1000 * comb.total / BASE * SPEEDS[sp]); t0 = t;
+    d = Math.min(comb.total, d + (t - t0) / 1000 * comb.total / base() * SPEEDS[sp]); t0 = t;
     show();
     if (d >= comb.total) { playing = false; btn(); return; }
     raf = requestAnimationFrame(frame);
@@ -31,7 +32,6 @@
   function play() {
     if (!comb) return;
     if (d >= comb.total) d = 0;
-    if (!zoomed) { zoomed = true; if (T.map.raw.getZoom() < 12) T.map.raw.setZoom(12); }
     playing = true; t0 = performance.now(); btn(); raf = requestAnimationFrame(frame);
   }
   function pause() { playing = false; cancelAnimationFrame(raf); btn(); }
@@ -43,6 +43,8 @@
     if (!comb) { T.ui.toast('Tracez d’abord un parcours pour le parcourir', 'info', 2500); return; }
     if (bar) { close(); return; }
     d = 0; zoomed = false;
+    // Zoom adapté à la longueur : on voit le cheminement et son contexte (≈ zoom 10 pour 120 km, 12 pour 10 km, 14 pour 2 km)
+    T.map.raw.jumpTo({ center: comb.coords[0], zoom: U.clamp(15 - 0.75 * Math.log2(comb.total / 1000 + 1), 8.5, 15) });
     bar = document.createElement('div');
     bar.className = 'player';
     bar.innerHTML = `<div class="pl-row">
