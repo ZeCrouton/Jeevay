@@ -710,10 +710,15 @@
 
   function locate() {
     if (!navigator.geolocation) { UI.toast('Géolocalisation indisponible', 'error'); return; }
-    navigator.geolocation.getCurrentPosition(
-      p => M.flyTo([p.coords.longitude, p.coords.latitude], 13),
-      () => UI.toast('Position refusée ou indisponible', 'error'),
-      { enableHighAccuracy: false, timeout: 8000 });
+    const ok = p => M.flyTo([p.coords.longitude, p.coords.latitude], 13);
+    const fail = e => UI.toast(e && e.code === 1
+      ? 'Localisation refusée pour ce site : autorisez-la (cadenas près de l’adresse → Autorisations) et vérifiez que la localisation du téléphone est activée.'
+      : e && e.code === 2 ? 'Position indisponible : activez la localisation du téléphone (GPS) et réessayez.'
+      : 'Position introuvable pour le moment : réessayez à l’extérieur ou avec le GPS activé.', 'error', 6000);
+    UI.toast('Recherche de votre position…', 'info', 2500);
+    navigator.geolocation.getCurrentPosition(ok,
+      e => { if (e && e.code === 1) return fail(e); navigator.geolocation.getCurrentPosition(ok, fail, { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 }); },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 });
   }
 
   // ---------- Recherche ----------
