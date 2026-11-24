@@ -1,6 +1,6 @@
 /* Fournisseur de points d'intérêt : Overpass (données OpenStreetMap, gratuit, sans clé).
-   Une seule requête « couloir » le long du tracé simplifié (filtre around sur une ligne) :
-   le serveur ne cherche que près du parcours, quelle que soit sa longueur.
+   Une seule requête par parcours : une petite boîte par tronçon d'environ 12 km (recherche par zone,
+   rapide côté serveur), puis tri au mètre près côté navigateur.
    Plusieurs serveurs en relais (le suivant démarre si le premier tarde), résultats gardés en mémoire
    et dans le navigateur.
    Interface : key(coords) -> clé du tracé ; load(coords, key, cats, signal) -> { items } ; collect(key, cats) ; cached(key, cats) */
@@ -85,10 +85,13 @@ T.providers.poi = (() => {
   async function load(coords, k, cats, signal) {
     const miss = cats.filter(c => !cache.has(k + '|' + c));
     if (miss.length) {
-      const { pts, tol } = line(coords);
-      const poly = pts.map(c => c[1].toFixed(5) + ',' + c[0].toFixed(5)).join(',');
-      const sel = miss.flatMap(c => CATS[c].q.map(q => `${q}(around:${Math.round(CATS[c].radius + tol)},${poly});`)).join('');
-      const j = await query(`[out:json][timeout:25];(${sel});out center tags 3000;`, signal);
+      // Boîtes le long du tracé (tronçons d'environ 12 km) : recherche par zone, très rapide côté serveur
+      const sel = boxes(coords).flatMap(bx => miss.flatMap(c => {
+        const r = CATS[c].radius, dy = r / 110540, dx = r / (111320 * Math.cos(bx[1] * Math.PI / 180));
+        const bb = [bx[1] - dy, bx[0] - dx, bx[3] + dy, bx[2] + dx].map(v => v.toFixed(4)).join(',');
+        return CATS[c].q.map(q => `${q}(${bb});`);
+      })).join('');
+      const j = await query(`[out:json][timeout:20];(${sel});out center tags 3000;`, signal);
       const per = Object.fromEntries(miss.map(c => [c, []]));
       for (const el of j.elements || []) {
         const tg = el.tags || {}, cat = miss.find(c => CATS[c].test(tg));
@@ -99,6 +102,21 @@ T.providers.poi = (() => {
       persist();
     }
     return collect(k, cats);
+  }
+
+  // Découpe le tracé en boîtes [ouest, sud, est, nord] d'environ 12 km de parcours
+  function boxes(coords) {
+    const pts = T.util.simplify(coords, 60), out = [];
+    let bx = null, run = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const c = pts[i];
+      if (!bx) bx = [c[0], c[1], c[0], c[1]];
+      else run += T.util.dist(pts[i - 1], c);
+      bx = [Math.min(bx[0], c[0]), Math.min(bx[1], c[1]), Math.max(bx[2], c[0]), Math.max(bx[3], c[1])];
+      if (run > 12000 && i < pts.length - 1) { out.push(bx); bx = [c[0], c[1], c[0], c[1]]; run = 0; }
+    }
+    if (bx) out.push(bx);
+    return out;
   }
 
   const cached = (k, cats) => cats.every(c => cache.has(k + '|' + c));
