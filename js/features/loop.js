@@ -61,20 +61,25 @@
     return pts;
   }
 
+  // Recale chaque point sur une route (rayon 1,5 km). Renvoie null si un point reste hors route (mer, forêt…).
   async function snapAll(pts, mode) {
     if (mode === 'run') return pts;
-    return Promise.all(pts.map(async p => {
-      try { return (await T.providers.routing.snap(p, mode, 1500)) || p; } catch (e) { return p; }
-    }));
+    const r = await Promise.all(pts.map(async p => { try { return await T.providers.routing.snap(p, mode, 1500); } catch (e) { return null; } }));
+    return r.every(Boolean) ? r : null;
   }
+  const hasFerryOrError = () => T.app.st().legs.some(l => l.status !== 'ok' || (l.an && l.an.ferry));
 
   async function start(o) {
     const S = T.app.S, mode = T.app.st().mode;
     T.ui.toast('Création de la boucle…', 'info', 2500);
-    const c0 = await origin(o);
-    const theta = o.dir === '' ? Math.random() * 360 : +o.dir;
+    let c0 = await origin(o);
+    if (mode !== 'run') {   // le départ doit être sur une route (pas en mer, pas hors réseau)
+      let p = null;
+      try { p = await T.providers.routing.snap(c0, mode, 3000); } catch (e) { /* ignoré */ }
+      if (!p) { T.ui.toast('Aucune route près du départ : déplacez la carte ou choisissez un autre départ.', 'warn', 5000); return; }
+      c0 = p;
+    }
     const n = mode === 'run' ? 3 : 4;
-    let D = o.km * 1000, pts = await snapAll(circle(c0, D, theta, n), mode);
     const build = ps => st => {
       const a = { id: U.uid(), c: c0 }, z = { id: U.uid(), c: c0 };
       st.waypoints = [a, ...ps.map(c => ({ id: U.uid(), c })), z];
@@ -82,18 +87,34 @@
       st._nextRoad = o.road;
       if (st.name === 'Mon parcours' || /^Boucle /.test(st.name)) st.name = `Boucle ${Math.round(o.km)} km`;
     };
-    S.commit(build(pts));
-    await waitIdle();
+    const D = o.km * 1000;
+    let theta = o.dir === '' ? Math.random() * 360 : +o.dir, pts = null, ok = false;
+    // Jusqu'à 4 propositions : tous les points sur route, aucun bac, aucun tronçon en erreur
+    for (let k = 0; k < 4 && !ok; k++) {
+      if (k) theta = o.dir === '' ? Math.random() * 360 : (+o.dir + (Math.random() - 0.5) * 70 + 360) % 360;
+      let cand = null;
+      for (let t = 0; t < 4 && !cand; t++) cand = await snapAll(circle(c0, D, theta, n), mode);
+      if (!cand) continue;
+      pts = cand;
+      S.commit(build(pts));
+      await waitIdle();
+      ok = !hasFerryOrError();
+    }
+    if (!pts) { T.ui.toast('Impossible de trouver une boucle ici : essayez un autre départ ou une autre direction.', 'warn', 5000); return; }
     // Un ajustement si la distance obtenue s'écarte trop de la cible
     let total = T.analysis.summary(T.app.st()).distance;
-    if (total > 0 && Math.abs(total / D - 1) > 0.2) {
+    if (ok && total > 0 && Math.abs(total / D - 1) > 0.2) {
       const scaled = await snapAll(circle(c0, D * (D / total), theta, n), mode);
-      S.amend(st => { const keep = st.name; build(scaled)(st); st.name = keep; });
-      await waitIdle();
-      total = T.analysis.summary(T.app.st()).distance;
+      if (scaled) {
+        S.amend(st => { const keep = st.name; build(scaled)(st); st.name = keep; });
+        await waitIdle();
+        if (hasFerryOrError()) { S.amend(st => { const keep = st.name; build(pts)(st); st.name = keep; }); await waitIdle(); }
+        total = T.analysis.summary(T.app.st()).distance;
+      }
     }
     T.app.fitAll();
-    T.ui.toast(`Boucle de ${U.fmtKm(total)} (cible ${o.km} km). Relancez « Créer une boucle » pour une autre proposition.`, 'info', 5000);
+    T.ui.toast(ok ? `Boucle de ${U.fmtKm(total)} (cible ${o.km} km). Relancez « Créer une boucle » pour une autre proposition.`
+      : 'Boucle approximative (bac ou tronçon en erreur) : relancez « Créer une boucle » pour une autre proposition.', 'info', 5000);
   }
 
   T.hooks.act.loop = () => { if (!T.app.guard()) dialog(); };
