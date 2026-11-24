@@ -81,6 +81,7 @@ button { cursor: pointer; }
 .tool:disabled { opacity: .35; cursor: default; background: none; }
 .tool[aria-pressed=true] { background: var(--accent); color: #fff; }
 #app.append-mode .maplibregl-canvas { cursor: crosshair; }
+#app.trace-locked .wp { cursor: pointer; }
 .slope-legend {
   position: absolute; z-index: 4; left: 68px; top: calc(max(12px, env(safe-area-inset-top)) + 200px);
   background: var(--panel); border-radius: 10px; box-shadow: var(--shadow); padding: 8px 10px; font: 600 13px var(--num);
@@ -356,6 +357,8 @@ textarea { resize: vertical; font-family: var(--num); }
   .fig .v { font-size: 19px; }
   .fig .l { font-size: 12px; }
   .actions { order: -1; border-top: 0; border-bottom: 1px solid var(--line); padding: 6px 12px; }
+  .actions .btn { flex: 0 0 auto; min-width: 52px; padding: 0 12px; }
+  .actions .btn-primary { flex: 1 1 auto; }
   .actions .btn span { display: none; }
   .actions .btn-primary span { display: inline; }
   .chooser { left: 50%; bottom: calc(var(--peek) + 10px); width: calc(100vw - 20px); }

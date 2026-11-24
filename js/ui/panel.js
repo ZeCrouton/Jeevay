@@ -106,7 +106,7 @@ T.panel = (() => {
       <p class="lead">Touchez la carte pour poser le <b>départ</b>, puis vos étapes.</p>
       <p>Le tracé, le dénivelé et les difficultés s’affichent aussitôt. Pour chaque tronçon, vous pouvez ensuite indiquer le type de route à préférer${mode === 'moto' ? ' (autoroute, nationale, départementale ou petites routes)' : ''}.</p>
       <div class="empty-actions">
-        <button class="btn" data-act="import">${I('upload')}Importer un GPX / KML</button>
+        <button class="btn" data-act="import">${I('download')}Importer un GPX / KML</button>
         <button class="btn" data-act="gmaps">${I('gmaps')}Lien Google Maps</button>
         <button class="btn" data-act="loop">${I('route')}Créer une boucle</button>
       </div></div>`;

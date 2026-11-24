@@ -43,6 +43,7 @@
     <button class="tool" id="tool-slope" data-act="slope" data-icon="slope" title="Colorer selon la pente" aria-label="Colorer selon la pente" aria-pressed="false"></button>
     <button class="tool" data-act="style" data-icon="layers" title="Changer de fond de carte" aria-label="Changer de fond de carte"></button>
     <button class="tool" data-act="locate" data-icon="locate" title="Me localiser" aria-label="Me localiser"></button>
+    <button class="tool" id="tool-lock" data-act="lock" data-icon="unlock" title="Verrouiller le tracé (évite les modifications involontaires)" aria-label="Verrouiller le tracé" aria-pressed="false"></button>
   </div>
   <div id="slope-legend" class="slope-legend" hidden></div>
 
@@ -64,9 +65,9 @@
       <section id="legs"></section>
     </div>
     <nav class="actions">
-      <button class="btn" data-act="import" data-icon="upload"><span>Importer</span></button>
+      <button class="btn" data-act="import" data-icon="download"><span>Importer</span></button>
       <button class="btn" data-act="share" data-icon="link"><span>Partager</span></button>
-      <button class="btn btn-primary" data-act="export" data-icon="download"><span>Exporter GPX</span></button>
+      <button class="btn btn-primary" data-act="export" data-icon="upload"><span>Exporter GPX</span></button>
       <button class="icon-btn btn-more" data-act="more" data-icon="more" aria-label="Plus d’options"></button>
     </nav>
   </aside>

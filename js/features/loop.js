@@ -96,5 +96,5 @@
     T.ui.toast(`Boucle de ${U.fmtKm(total)} (cible ${o.km} km). Relancez « Créer une boucle » pour une autre proposition.`, 'info', 5000);
   }
 
-  T.hooks.act.loop = dialog;
+  T.hooks.act.loop = () => { if (!T.app.guard()) dialog(); };
 })();

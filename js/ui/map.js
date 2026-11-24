@@ -124,7 +124,7 @@ T.map = (() => {
       el.className = `wp wp-${kind}${w.locked ? ' wp-locked' : ''}`;
       el.textContent = i === 0 ? 'D' : i === n - 1 ? 'A' : String(i);
       el.title = (w.name ? w.name + ' — ' : '') + (w.locked ? 'extrémité d’un tracé importé' : 'glisser pour déplacer');
-      m.setDraggable(!w.locked);
+      m.setDraggable(!w.locked && !(h.isLocked && h.isLocked()));
       const p = m.getLngLat();
       if (Math.abs(p.lng - w.c[0]) > 1e-9 || Math.abs(p.lat - w.c[1]) > 1e-9) m.setLngLat(w.c);
     });

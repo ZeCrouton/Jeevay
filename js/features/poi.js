@@ -92,6 +92,7 @@
 
   // Ajoute le lieu comme étape au bon endroit du parcours (dans le tronçon le plus proche)
   function insertStop(c) {
+    if (T.app.guard()) return;
     const s = T.app.st(), comb = T.analysis.combine(s);
     if (!s.legs.length) { T.app.addPoint(c); return; }
     let bi = 0, bd = Infinity;

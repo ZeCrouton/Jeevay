@@ -91,26 +91,31 @@ T.store = (() => {
     try { localStorage.setItem(KEY, JSON.stringify(T.storage.serialize(s))); } catch (e) { console.warn('Sauvegarde locale impossible', e); }
   }
 
-  function commit(fn) {
+  let locked = false;
+  // Verrou : aucune modification du tracé (sauf force, pour le chargement volontaire d'un parcours partagé)
+  function commit(fn, force) {
+    if (locked && !force) return false;
     past.push(snap());
     if (past.length > 40) past.shift();
     future.length = 0;
     fn(s);
     T.engine.reconcile(s);
     changed();
+    return true;
   }
   function silent(fn) { fn(s); changed(); }
   // Modification sans entrée d'historique, mais avec mise à jour des tronçons (ex. recalage d'un point)
   function amend(fn) { fn(s); T.engine.reconcile(s); changed(); }
   function undo() {
-    if (!past.length) return false;
+    if (locked || !past.length) return false;
     future.push(snap()); restore(past.pop()); T.engine.reconcile(s); changed(); return true;
   }
   function redo() {
-    if (!future.length) return false;
+    if (locked || !future.length) return false;
     past.push(snap()); restore(future.pop()); T.engine.reconcile(s); changed(); return true;
   }
-  function replace(data) { commit(st => restore(data)); }
+  function replace(data) { commit(st => restore(data), true); }
+  function setLocked(v) { locked = !!v; changed(); }
   function load() {
     try {
       const raw = localStorage.getItem(KEY);
@@ -121,7 +126,7 @@ T.store = (() => {
   }
 
   return {
-    get state() { return s; }, blank, commit, silent, amend, undo, redo, replace, load,
+    get state() { return s; }, get locked() { return locked; }, setLocked, blank, commit, silent, amend, undo, redo, replace, load,
     canUndo: () => past.length > 0, canRedo: () => future.length > 0,
     on: f => listeners.add(f)
   };

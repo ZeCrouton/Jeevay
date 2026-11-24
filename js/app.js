@@ -5,8 +5,15 @@
   const accent = () => T.config.modes[st().mode].accent;
 
   // ---------- Actions sur le parcours ----------
-  let appendMode = false;
+  let appendMode = false, lockToast = 0;
+  // Tracé verrouillé : refuse la modification et le dit (au plus une fois toutes les 1,5 s)
+  function guard() {
+    if (!S.locked) return false;
+    if (Date.now() - lockToast > 1500) { lockToast = Date.now(); UI.toast('Tracé verrouillé : touche le cadenas pour le modifier', 'info', 2200); }
+    return true;
+  }
   function addPoint(c) {
+    if (guard()) return;
     UI.closeChooser();
     const snap = T.settings.get().snapMain && st().mode !== 'run';
     let id;
@@ -27,11 +34,13 @@
   }
 
   function movePoint(id, c) {
+    if (guard()) return;
     S.commit(s => { s.waypoints = s.waypoints.map(w => w.id === id ? { ...w, c, name: null } : w); });
     nameLater(id);
   }
 
   function removePoint(id) {
+    if (guard()) return;
     M.closePopup();
     S.commit(s => {
       const i = s.waypoints.findIndex(w => w.id === id);
@@ -42,6 +51,7 @@
   }
 
   function insertOnLeg(i, c) {
+    if (guard()) return;
     M.closePopup();
     let newId;
     S.commit(s => {
@@ -67,6 +77,7 @@
   }
 
   function setLegRoad(i, road) {
+    if (guard()) return;
     S.commit(s => {
       s.legs = s.legs.slice();
       s.legs[i] = E.invalidate(s.legs[i], road === 'line' ? { kind: 'line', road: null } : { kind: 'route', road });
@@ -74,7 +85,7 @@
   }
 
   function setMode(mode) {
-    if (mode === st().mode) return;
+    if (mode === st().mode || guard()) return;
     S.commit(s => {
       s.mode = mode;
       const r = E.defaultRoad(mode);
@@ -83,7 +94,7 @@
   }
 
   function reverse() {
-    if (st().waypoints.length < 2) return;
+    if (st().waypoints.length < 2 || guard()) return;
     S.commit(s => {
       s.waypoints = s.waypoints.slice().reverse();
       s.legs = s.legs.slice().reverse().map(L => {
@@ -95,12 +106,13 @@
   }
 
   function clearAll() {
-    if (!st().waypoints.length) return;
+    if (!st().waypoints.length || guard()) return;
     S.commit(s => { s.waypoints = []; s.legs = []; s.name = 'Mon parcours'; });
     UI.toast('Parcours effacé — Ctrl+Z pour annuler');
   }
 
   function addItems(items, { replace, connect }) {
+    if (guard()) return;
     S.commit(s => {
       if (replace) { s.waypoints = []; s.legs = []; }
       for (const it of items) {
@@ -181,9 +193,9 @@
       <p class="pop-m">km ${U.nf(d / 1000, 1)}${e != null ? ` · ${U.nf(e)} m · pente ${sl > 0 ? '+' : ''}${U.nf(sl, 0)} %` : ''}</p>
       <div class="pop-a">
         <a class="btn btn-sm" href="${U.streetViewUrl(p, head)}" target="_blank" rel="noopener">${I('eye')}Street View</a>
-        <button class="btn btn-sm" data-a="ins">${I('plus')}Point ici</button>
+        ${S.locked ? '' : `<button class="btn btn-sm" data-a="ins">${I('plus')}Point ici</button>
         <button class="btn btn-sm" data-a="end">${I('append')}Continuer ici</button>
-        ${L.kind !== 'track' ? `<button class="btn btn-sm" data-a="road">${I('route')}Préférer…</button>` : ''}
+        ${L.kind !== 'track' ? `<button class="btn btn-sm" data-a="road">${I('route')}Préférer…</button>` : ''}`}
       </div>`;
     el.addEventListener('click', ev => {
       const a = ev.target.closest('[data-a]');
@@ -202,12 +214,13 @@
     const el = document.createElement('div');
     el.className = 'pop';
     el.innerHTML = `<div class="pop-h"><b>${U.esc(label)}</b></div>
-      ${w.locked ? '<p class="pop-m">Extrémité d’un tracé importé</p>' : '<p class="pop-m">Glissez le point pour le déplacer</p>'}
+      ${S.locked ? '<p class="pop-m">Tracé verrouillé</p>' : w.locked ? '<p class="pop-m">Extrémité d’un tracé importé</p>' : '<p class="pop-m">Glissez le point pour le déplacer</p>'}
       <div class="pop-a">
         <a class="btn btn-sm" href="${U.streetViewUrl(w.c)}" target="_blank" rel="noopener">${I('eye')}Street View</a>
-        <button class="btn btn-sm btn-danger" data-a="del">${I('trash')}Supprimer</button>
+        ${S.locked ? '' : `<button class="btn btn-sm btn-danger" data-a="del">${I('trash')}Supprimer</button>`}
       </div>`;
-    el.querySelector('[data-a="del"]').addEventListener('click', () => removePoint(id));
+    const del = el.querySelector('[data-a="del"]');
+    if (del) del.addEventListener('click', () => removePoint(id));
     M.openPopup(w.c, el);
   }
 
@@ -292,8 +305,16 @@
       ? '<p class="hint-inline">Ajoutez un deuxième point pour tracer le premier tronçon.</p>' : T.panel.legs(s);
     const nm = $('#route-name');
     if (document.activeElement !== nm) nm.value = s.name;
-    $('[data-act="undo"]').disabled = !S.canUndo();
-    $('[data-act="redo"]').disabled = !S.canRedo();
+    $('[data-act="undo"]').disabled = S.locked || !S.canUndo();
+    $('[data-act="redo"]').disabled = S.locked || !S.canRedo();
+    const lk = $('#tool-lock');
+    if (lk.getAttribute('aria-pressed') !== String(S.locked)) {
+      lk.setAttribute('aria-pressed', String(S.locked));
+      lk.innerHTML = I(S.locked ? 'lock' : 'unlock');
+      lk.title = S.locked ? 'Déverrouiller le tracé' : 'Verrouiller le tracé (évite les modifications involontaires)';
+      lk.setAttribute('aria-label', S.locked ? 'Déverrouiller le tracé' : 'Verrouiller le tracé');
+      $('#app').classList.toggle('trace-locked', S.locked);
+    }
     $('#tool-slope').setAttribute('aria-pressed', String(T.settings.get().colorBy === 'slope'));
     const lg = $('#slope-legend'), bySlope = T.settings.get().colorBy === 'slope';
     lg.hidden = !A.combine(s).coords.length;
@@ -384,6 +405,7 @@
       } catch (e) { UI.toast(`Recherche impossible pour : ${s.q}`, 'error'); }
     }
     if (pts.length < 2) { UI.toast('Pas assez d’étapes reconnues dans ce lien', 'error'); return; }
+    if (guard()) return;
     S.commit(s => {
       if (replace) { s.waypoints = []; s.legs = []; }
       pts.forEach(p => s.waypoints.push({ id: U.uid(), c: p.c, name: p.name && p.name.length < 40 ? p.name.split(',')[0] : null }));
@@ -444,7 +466,7 @@
       }
       if (b.dataset.open) {
         const data = T.storage.library.get(b.dataset.open);
-        if (data) { S.replace(data); UI.close(); setTimeout(fitAll, 50); }
+        if (data) { if (guard()) return; S.replace(data); UI.close(); setTimeout(fitAll, 50); }
       }
       if (b.dataset.del) { T.storage.library.remove(b.dataset.del); draw(); }
     });
@@ -509,11 +531,18 @@
   function act(a, el) {
     const i = el && el.dataset.i != null ? +el.dataset.i : null;
     switch (a) {
+      case 'lock': {
+        T.settings.set({ locked: !S.locked });
+        S.setLocked(!S.locked);
+        M.closePopup(); UI.closeChooser();
+        UI.toast(S.locked ? 'Tracé verrouillé' : 'Tracé déverrouillé', 'info', 1800);
+        break;
+      }
       case 'undo': S.undo(); break;
       case 'redo': S.redo(); break;
       case 'fit': fitAll(); break;
-      case 'import': $('#file-input').click(); break;
-      case 'gmaps': gmapsDialog(); break;
+      case 'import': if (!guard()) $('#file-input').click(); break;
+      case 'gmaps': if (!guard()) gmapsDialog(); break;
       case 'export': exportDialog(); break;
       case 'library': libraryDialog(); break;
       case 'settings': settingsDialog(); break;
@@ -653,6 +682,7 @@
     document.querySelectorAll('[data-icon]').forEach(el => { el.insertAdjacentHTML('afterbegin', I(el.dataset.icon)); });
     M.init('map', {
       appendMode: () => appendMode,
+      isLocked: () => S.locked,
       mapClick: c => { M.closePopup(); addPoint(c); },
       legClick: (i, c) => { UI.closeChooser(); legPopup(i, c); },
       wpClick: id => { UI.closeChooser(); wpPopup(id); },
@@ -693,11 +723,12 @@
       if (mod && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); S.redo(); }
     });
 
-    T.app = { st, S, render, fitAll, addPoint, accent, nameLater, collapseSheet, act };
+    T.app = { st, S, render, fitAll, addPoint, accent, nameLater, collapseSheet, act, guard };
     if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
     T.hooks.init.forEach(f => { try { f(); } catch (e) { console.warn(e); } });
     S.on(render);
     S.load();
+    if (T.settings.get().locked) S.setLocked(true);
     if (st().waypoints.length) setTimeout(fitAll, 400);
   }
 
