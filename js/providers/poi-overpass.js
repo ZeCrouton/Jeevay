@@ -9,13 +9,13 @@ T.providers = T.providers || {};
 
 T.providers.poi = (() => {
   const CATS = {
-    fuel: { label: 'Stations-service', color: '#e8590c', radius: 1200, q: ['nwr["amenity"="fuel"]'], test: t => t.amenity === 'fuel' },
+    fuel: { label: 'Stations-service', color: '#e8590c', radius: 1200, q: ['nw["amenity"="fuel"]'], test: t => t.amenity === 'fuel' },
     pass: { label: 'Cols', color: '#5f3dc4', radius: 300, q: ['node["mountain_pass"="yes"]["name"]'], test: t => t.mountain_pass === 'yes' },
     view: { label: 'Panoramas', color: '#2b8a3e', radius: 350, q: ['node["tourism"="viewpoint"]'], test: t => t.tourism === 'viewpoint' },
-    water: { label: 'Points d’eau', color: '#1c7ed6', radius: 300, q: ['nwr["amenity"="drinking_water"]'], test: t => t.amenity === 'drinking_water' },
-    food: { label: 'Cafés et restos', color: '#c2255c', radius: 150, q: ['nwr["amenity"~"^(cafe|restaurant)$"]["name"]'], test: t => t.amenity === 'cafe' || t.amenity === 'restaurant' },
-    bike: { label: 'Réparation vélo', color: '#0b7285', radius: 600, q: ['nwr["shop"="bicycle"]', 'nwr["amenity"="bicycle_repair_station"]'], test: t => t.shop === 'bicycle' || t.amenity === 'bicycle_repair_station' },
-    wc: { label: 'Toilettes', color: '#868e96', radius: 200, q: ['nwr["amenity"="toilets"]'], test: t => t.amenity === 'toilets' }
+    water: { label: 'Points d’eau', color: '#1c7ed6', radius: 300, q: ['nw["amenity"="drinking_water"]'], test: t => t.amenity === 'drinking_water' },
+    food: { label: 'Cafés et restos', color: '#c2255c', radius: 150, q: ['nw["amenity"~"^(cafe|restaurant)$"]["name"]'], test: t => t.amenity === 'cafe' || t.amenity === 'restaurant' },
+    bike: { label: 'Réparation vélo', color: '#0b7285', radius: 600, q: ['nw["shop"="bicycle"]', 'nw["amenity"="bicycle_repair_station"]'], test: t => t.shop === 'bicycle' || t.amenity === 'bicycle_repair_station' },
+    wc: { label: 'Toilettes', color: '#868e96', radius: 200, q: ['nw["amenity"="toilets"]'], test: t => t.amenity === 'toilets' }
   };
   const BY_MODE = {
     moto: { all: ['fuel', 'pass', 'view', 'food'], on: ['fuel', 'pass'] },
@@ -56,10 +56,13 @@ T.providers.poi = (() => {
     const urls = T.config.poi.urls, delays = [0, 2500, 6000];
     return new Promise((resolve, reject) => {
       const ctrls = [], timers = [];
-      let left = urls.length, done = false, lastErr = null;
+      let left = urls.length, done = false; const why = [];
       const stop = () => { done = true; timers.forEach(clearTimeout); ctrls.forEach(c => c.abort()); };
       if (signal) signal.addEventListener('abort', () => { stop(); reject(Object.assign(new Error('annulé'), { name: 'AbortError' })); }, { once: true });
-      const fail = e => { lastErr = e; if (--left === 0 && !done) { done = true; reject(lastErr); } };
+      const fail = (i, e) => {
+        why.push(urls[i].split('/')[2].replace(/^(overpass|maps)\./, '') + ' : ' + (e.timeout ? 'délai dépassé' : /HTTP|remark|runtime|timed/i.test(e.message) ? e.message.slice(0, 40) : 'bloqué (réseau)'));
+        if (--left === 0 && !done) { done = true; reject(Object.assign(new Error('indisponible'), { detail: why.join(' · ') })); }
+      };
       urls.forEach((_, n) => {
         const i = (n + preferred) % urls.length;
         timers.push(setTimeout(async () => {
@@ -73,7 +76,7 @@ T.providers.poi = (() => {
             if (done) return;
             if (j.remark && /runtime error|timed out|out of memory/i.test(j.remark) && !(j.elements || []).length) throw new Error(j.remark);
             preferred = i; stop(); resolve(j);
-          } catch (e) { if (!done) fail(e); }
+          } catch (e) { if (!done) fail(i, e); }
         }, delays[n] ?? n * 5000));
       });
     });
