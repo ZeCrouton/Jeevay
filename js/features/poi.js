@@ -139,7 +139,7 @@
     el.innerHTML = `<div class="sec-h"><h3>Sur le parcours</h3>${status}</div>
       <div class="cats">${all.map(k => `<button class="cat${on.has(k) ? ' on' : ''}" data-act="poiCat" data-k="${k}" style="--c:${P.CATS[k].color}"><i></i>${P.CATS[k].label}${counts[k] ? `<b>${counts[k]}</b>` : ''}</button>`).join('')}</div>
       ${data.error ? `<p class="muted small">Lieux momentanément indisponibles.${data.why ? `<br><small>${U.esc(data.why)}</small>` : ''}</p>` : ''}
-      ${!data.loading && !data.error && P.cached(data.key, [...on]) && !list.length ? '<p class="muted small">Aucun lieu de ces catégories près du parcours.</p>' : ''}
+      ${!data.loading && !data.error && P.cached(data.key, [...on]) && !list.length ? `<p class="muted small">${P.covered(data.key) ? 'Aucun lieu de ces catégories près du parcours.' : 'Lieux disponibles en France uniquement pour le moment.'}</p>` : ''}
       ${rows.length ? `<ul class="pois">${rows.map(it => `<li><button data-act="poiGo" data-id="${it.id}"><i class="dot" style="background:${P.CATS[it.cat].color}"></i><span class="pn">${U.esc(it.name)}</span><span class="pk">km ${U.nf(it.d / 1000, 1)}</span></button></li>`).join('')}</ul>` : ''}
       ${list.length > rows.length ? `<button class="mini" data-act="poiMore">Voir les ${list.length} lieux</button>` : ''}`;
     T.map.setPois(list.map(it => ({ type: 'Feature', geometry: { type: 'Point', coordinates: it.c }, properties: { id: it.id, color: P.CATS[it.cat].color } })));

@@ -18,7 +18,7 @@ Site statique (HTML/CSS/JS, sans compilation). 100 % gratuit, sans clé ni compt
 - Parcours sauvegardés dans le navigateur.
 
 ## V2
-- Points d'intérêt le long du tracé (OpenStreetMap / Overpass) : stations-service, cols, panoramas, points d'eau, cafés, réparation vélo, toilettes ; ajout comme étape.
+- Points d'intérêt le long du tracé (base OpenStreetMap mise à jour chaque mois par GitHub Actions, branche poi-data) : stations-service, cols, panoramas, points d'eau, cafés, réparation vélo, toilettes ; ajout comme étape.
 - Alerte d'autonomie carburant (moto, autonomie réglable).
 - Météo à l'heure de passage (Open-Meteo, 16 jours) : pluie, rafales, verglas, chaleur, arrivée après le coucher du soleil.
 - Score « plaisir moto » sur 10 (parcours et tronçons).

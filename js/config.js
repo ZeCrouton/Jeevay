@@ -5,7 +5,7 @@ window.T = window.T || {};
 
 T.config = {
   appName: 'Trajecto',
-  version: '1.1.6',
+  version: '1.2.0',
   storagePrefix: 'trajecto.',
 
   map: {
@@ -26,8 +26,8 @@ T.config = {
   // Recherche de lieux (Photon / Komoot, gratuit, sans clé)
   geocode: { url: 'https://photon.komoot.io', fallback: 'https://nominatim.openstreetmap.org' },
 
-  // Points d'intérêt (Overpass / OpenStreetMap, gratuit) : 2 serveurs, le second en secours
-  poi: { urls: ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'] },
+  // Points d'intérêt : base OpenStreetMap préparée chaque mois (branche poi-data), miroir CDN en secours
+  poi: { bases: ['https://raw.githubusercontent.com/ZeCrouton/Trajecto/poi-data/poi/', 'https://cdn.jsdelivr.net/gh/ZeCrouton/Trajecto@poi-data/poi/'] },
   // Prévisions météo (Open-Meteo, gratuit, 16 jours)
   weather: { url: 'https://api.open-meteo.com/v1/forecast', days: 16 },
 

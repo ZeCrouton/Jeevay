@@ -1,0 +1,42 @@
+# Base de lieux de Trajecto : chaque mois, extrait les lieux utiles des données OpenStreetMap
+# (Geofabrik, France) et les publie sur la branche « poi-data » (sans historique, remplacée à chaque fois).
+name: Base de lieux
+on:
+  schedule:
+    - cron: '17 3 2 * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/poi.yml', 'tools/poi/**']
+permissions:
+  contents: write
+concurrency: { group: poi-data, cancel-in-progress: true }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Outils
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool
+      - name: Données OpenStreetMap (France)
+        run: curl -fsSL -o france.osm.pbf https://download.geofabrik.de/europe/france-latest.osm.pbf
+      - name: Filtre des lieux
+        run: |
+          osmium tags-filter france.osm.pbf \
+            nwr/amenity=fuel,drinking_water,toilets,cafe,restaurant,bicycle_repair_station \
+            nwr/shop=bicycle n/mountain_pass=yes n/tourism=viewpoint \
+            -o poi.osm.pbf --overwrite
+          osmium export poi.osm.pbf -f geojsonseq -x print_record_separator=false \
+            --attributes=type,id -o poi.geojsonseq --overwrite
+      - name: Découpage en cases
+        run: python3 tools/poi/build.py poi.geojsonseq out/poi
+      - name: Publication sur la branche poi-data
+        run: |
+          cd out
+          git init -q -b poi-data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          printf 'Lieux © contributeurs OpenStreetMap, licence ODbL (https://www.openstreetmap.org/copyright).\n' > LICENCE.txt
+          git add -A && git commit -qm "Base de lieux $(date +%F)"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" poi-data
