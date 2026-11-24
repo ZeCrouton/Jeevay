@@ -13,10 +13,18 @@
   };
   const current = () => { const c = A.combine(T.app.st()); return c.coords.length > 1 && c.total > 0 ? c : null; };
 
+  // Centre visuel de la carte : on retire les zones masquées (panneau, outils, lecteur, barre du haut)
+  const offset = () => {
+    const m = window.innerWidth <= 760, pb = bar ? bar.offsetHeight + 16 : 0;
+    const top = m ? 120 : 70, bottom = m ? 132 + pb + 12 : pb + 12, left = m ? 0 : 60, right = m ? 60 : 424;
+    return [(left - right) / 2, (top - bottom) / 2];
+  };
+  const center = p => T.map.raw.easeTo({ center: p, offset: offset(), duration: 0 });
+
   function show() {
     const p = pos(comb);
     T.map.setHover(p, T.app.accent());
-    T.map.raw.jumpTo({ center: p });
+    center(p);
     const e = A.eleAt(comb, d);
     bar.querySelector('input').value = String(Math.round(d / comb.total * 1000));
     bar.querySelector('.pl-info').textContent = `km ${U.nf(d / 1000, 1)} / ${U.nf(comb.total / 1000, 1)}${e != null ? ' · ' + U.nf(e) + ' m' : ''}`;
@@ -44,7 +52,7 @@
     if (bar) { close(); return; }
     d = 0; zoomed = false;
     // Zoom adapté à la longueur : on voit le cheminement et son contexte (≈ zoom 10 pour 120 km, 12 pour 10 km, 14 pour 2 km)
-    T.map.raw.jumpTo({ center: comb.coords[0], zoom: U.clamp(15 - 0.75 * Math.log2(comb.total / 1000 + 1), 8.5, 15) });
+    T.map.raw.jumpTo({ zoom: U.clamp(15 - 0.75 * Math.log2(comb.total / 1000 + 1), 8.5, 15) });
     bar = document.createElement('div');
     bar.className = 'player';
     bar.innerHTML = `<div class="pl-row">
