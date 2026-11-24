@@ -717,7 +717,10 @@
 
   function locate() {
     if (!navigator.geolocation) { UI.toast('Géolocalisation indisponible', 'error'); return; }
-    const ok = p => M.flyTo([p.coords.longitude, p.coords.latitude], 13);
+    const ok = p => {
+      M.flyTo([p.coords.longitude, p.coords.latitude], p.coords.accuracy > 2000 ? 11 : 13);
+      if (p.coords.accuracy > 2000) UI.toast(`Position approximative (± ${Math.round(p.coords.accuracy / 1000)} km) : sur PC, le navigateur n’a pas de GPS. Recherchez votre lieu dans la barre pour être précis.`, 'info', 7000);
+    };
     const fail = e => UI.toast(e && e.code === 1
       ? 'Localisation refusée pour ce site : autorisez-la (cadenas près de l’adresse → Autorisations) et vérifiez que la localisation du téléphone est activée.'
       : e && e.code === 2 ? 'Position indisponible : activez la localisation du téléphone (GPS) et réessayez.'
