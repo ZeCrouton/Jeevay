@@ -30,6 +30,7 @@ T.sync = (() => {
     return [...m.values()].sort((x, y) => (y.date || 0) - (x.date || 0));
   }
   async function run(c = code()) {
+    await T.storage.ready;
     const local = T.storage.library.all();
     const remote = (await call('GET', c)).lib || [];
     const merged = merge(local, remote);

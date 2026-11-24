@@ -51,11 +51,42 @@ T.storage = (() => {
     return { name: o.name || 'Mon parcours', mode: T.config.modes[o.mode] ? o.mode : 'moto', waypoints: wps, legs };
   }
 
-  const read = () => { try { return JSON.parse(localStorage.getItem(LIB) || '[]'); } catch (e) { return []; } };
-  const write = all => localStorage.setItem(LIB, JSON.stringify(all));
+  // Bibliothèque des parcours : IndexedDB (des centaines de Mo) avec copie en mémoire ; localStorage (≈5 Mo) trop petit.
+  // Repli sur localStorage si IndexedDB est indisponible. T.storage.ready : promesse à attendre avant de fusionner/écraser.
+  let cache = [], idbOk = false, db = null;
+  const lsRead = () => { try { return JSON.parse(localStorage.getItem(LIB) || '[]'); } catch (e) { return []; } };
+  const idbReq = (mode, fn) => new Promise((res, rej) => {
+    const tx = db.transaction('lib', mode), r = fn(tx.objectStore('lib'));
+    tx.oncomplete = () => res(r.result); tx.onerror = tx.onabort = () => rej(tx.error || new Error('IndexedDB'));
+  });
+  const ready = new Promise(res => {
+    try {
+      const o = indexedDB.open(P + 'db', 1);
+      o.onupgradeneeded = () => o.result.createObjectStore('lib');
+      o.onerror = o.onblocked = () => { cache = lsRead(); res(); };
+      o.onsuccess = async () => {
+        db = o.result;
+        try {
+          const saved = await idbReq('readonly', s => s.get('all'));
+          if (Array.isArray(saved)) cache = saved;
+          else { cache = lsRead(); if (cache.length) await idbReq('readwrite', s => s.put(cache, 'all')); }
+          idbOk = true;
+          if (cache.length) { try { localStorage.removeItem(LIB); } catch (e) { /* ignore */ } }   // libère les 5 Mo
+          if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+        } catch (e) { cache = lsRead(); }
+        res();
+      };
+    } catch (e) { cache = lsRead(); res(); }
+  });
+  const read = () => cache;
+  const write = all => {
+    cache = all;
+    if (!idbOk) { localStorage.setItem(LIB, JSON.stringify(all)); return; }
+    idbReq('readwrite', s => s.put(all, 'all')).catch(() => T.ui && T.ui.toast('Stockage du navigateur plein : supprimez d’anciens parcours', 'error', 6000));
+  };
 
   return {
-    serialize, deserialize,
+    serialize, deserialize, ready,
     library: {
       all: read, replaceAll: write,
       list: () => read().map(({ data, ...meta }) => meta),
