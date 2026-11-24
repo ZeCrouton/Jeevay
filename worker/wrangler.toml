@@ -5,4 +5,4 @@ compatibility_date = "2024-11-01"
 # Remplacer l'id par celui affiché par : npx wrangler kv namespace create KV
 [[kv_namespaces]]
 binding = "KV"
-id = "REMPLACER_PAR_L_ID_KV"
+id = "e056be3a7ae848e5aa578c89d6271e0d"
