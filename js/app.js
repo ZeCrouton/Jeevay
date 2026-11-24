@@ -573,7 +573,7 @@
         ['slope', 'Pente', 'Colore le tracé selon la pente.'], ['layers', 'Fond de carte', 'Change l’aspect de la carte.'], ['locate', 'Me localiser', 'Centre la carte sur votre position.'],
         ['lock', 'Verrouiller', 'Empêche toute modification du tracé par erreur.'], ['help', 'Aide', 'Affiche cette page.']]],
       ['Panneau du parcours', [['download', 'Importer', 'Ouvre un fichier GPX pour le charger sur la carte.'], ['link', 'Partager', 'Crée un lien vers votre parcours.'],
-        ['upload', 'Exporter GPX', 'Enregistre le parcours en fichier GPX pour votre GPS ou votre montre.'], ['more', 'Plus d’options', 'Mes parcours, boucle, road-book, inverser le sens, Google Maps, réglages, tout effacer.']]]
+        ['upload', 'Exporter GPX', 'Enregistre le parcours en fichier GPX pour votre GPS ou votre montre.'], ['more', 'Plus d’options', 'Mes parcours, boucle, road-book, inverser le sens, Google Maps, réglages, tout effacer.'], ['sync', 'Retrouver mes parcours (code)', 'Crée un code personnel pour retrouver vos parcours enregistrés sur un autre appareil. Gardez-le secret : il donne accès à vos parcours.']]]
     ];
     UI.modal({
       title: 'À quoi servent les boutons ?', wide: true,
