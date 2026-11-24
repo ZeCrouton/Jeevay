@@ -57,6 +57,7 @@ T.storage = (() => {
   return {
     serialize, deserialize,
     library: {
+      all: read, replaceAll: write,
       list: () => read().map(({ data, ...meta }) => meta),
       get: id => { const e = read().find(x => x.id === id); return e ? deserialize(e.data) : null; },
       save(s, distance) {

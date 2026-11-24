@@ -1,8 +1,8 @@
-# Trajecto — itinéraires moto, vélo, running
+# Jeevay — itinéraires moto, vélo, running
 
 Crée tes itinéraires sur une carte, vois le dénivelé et les difficultés, exporte en GPX. Gratuit, sans compte.
 
-**[Ouvrir Trajecto](https://zecrouton.github.io/Trajecto/)** (s'installe aussi comme une appli sur téléphone)
+**[Ouvrir Jeevay](https://zecrouton.github.io/Trajecto/)** (s'installe aussi comme une appli sur téléphone)
 
 ## Ce que tu peux faire
 - Poser des points sur la carte et tracer le parcours, en moto, vélo ou running.

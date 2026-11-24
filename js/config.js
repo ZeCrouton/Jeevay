@@ -1,11 +1,11 @@
-/* Trajecto — configuration centrale.
+/* Jeevay — configuration centrale.
    Tous les services externes sont déclarés ici : pour passer plus tard sur
    un serveur à soi (Valhalla auto-hébergé, etc.), il suffit de changer les URL. */
 window.T = window.T || {};
 
 T.config = {
-  appName: 'Trajecto',
-  version: '1.4.0',
+  appName: 'Jeevay',
+  version: '1.5.0',
   storagePrefix: 'trajecto.',
 
   map: {
@@ -27,6 +27,9 @@ T.config = {
   geocode: { url: 'https://photon.komoot.io', fallback: 'https://nominatim.openstreetmap.org' },
 
   // Points d'intérêt : base OpenStreetMap préparée chaque mois (branche poi-data), miroir CDN en secours
+  // Synchronisation par code : Cloudflare Worker gratuit (dossier worker/)
+  sync: { url: 'https://jeevay-sync.nvz-photos.workers.dev' },
+
   poi: { bases: ['https://raw.githubusercontent.com/ZeCrouton/Trajecto/poi-data/poi/', 'https://cdn.jsdelivr.net/gh/ZeCrouton/Trajecto@poi-data/poi/'] },
   // Prévisions météo (Open-Meteo, gratuit, 16 jours)
   weather: { url: 'https://api.open-meteo.com/v1/forecast', days: 16 },

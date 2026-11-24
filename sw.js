@@ -1,10 +1,13 @@
 /* Service worker : l'application s'ouvre même hors connexion (la carte et les calculs, eux, ont besoin d'Internet). */
-const CACHE = 'trajecto-v1.4.0';
+const CACHE = 'jeevay-v1.5.0';
 const SHELL = [
   './',
   'index.html',
   'manifest.webmanifest',
-  'icon.svg',
+  'icon-192.png',
+  'icon-512.png',
+  'icon-maskable-512.png',
+  'apple-touch-icon.png',
   'css/app.css',
   'js/app.js',
   'js/config.js',
@@ -15,6 +18,7 @@ const SHELL = [
   'js/core/util.js',
   'js/features/loop.js',
   'js/features/poi.js',
+  'js/features/sync.js',
   'js/features/roadbook.js',
   'js/features/score.js',
   'js/features/share.js',

@@ -1,4 +1,4 @@
-/* Trajecto — assemblage de l'application : actions utilisateur, rendu, dialogues. */
+/* Jeevay — assemblage de l'application : actions utilisateur, rendu, dialogues. */
 (() => {
   const U = T.util, I = T.icons, S = T.store, E = T.engine, A = T.analysis, M = T.map, UI = T.ui, $ = UI.$;
   const st = () => S.state;
@@ -472,7 +472,7 @@
       if (b.hasAttribute('data-save')) {
         const name = $('#lib-name', body).value.trim() || 'Mon parcours';
         S.silent(s => { s.name = name; });
-        try { T.storage.library.save(st(), A.summary(st()).distance); UI.toast('Parcours enregistré'); draw(); }
+        try { T.storage.library.save(st(), A.summary(st()).distance); UI.toast('Parcours enregistré'); T.sync.auto(); draw(); }
         catch (err) { UI.toast('Stockage du navigateur plein : supprimez d’anciens parcours', 'error', 6000); }
       }
       if (b.dataset.open) {
@@ -523,6 +523,61 @@
     }));
   }
 
+  function syncDialog() {
+    const SY = T.sync, ago = t => t ? new Date(t).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : 'jamais';
+    const wrap = document.createElement('div');
+    const fail = e => UI.toast('Synchronisation impossible (' + (e && e.message === 'Failed to fetch' ? 'hors ligne ou service indisponible' : e.message) + ')');
+    const draw = () => {
+      const c = SY.code();
+      wrap.innerHTML = c ? `
+        <p>Votre code personnel :</p>
+        <p class="sync-code" id="sync-code">${U.esc(c)}</p>
+        <p class="muted">Saisissez-le sur un autre appareil (menu « ⋯ » → Retrouver mes parcours) pour y retrouver vos parcours enregistrés. Gardez-le secret : toute personne qui le connaît peut lire vos parcours.</p>
+        <p class="muted">Dernière synchronisation : ${ago(T.settings.get().syncAt)}. Les parcours sont fusionnés (le plus récent l’emporte) ; une suppression n’est pas répercutée sur les autres appareils.</p>
+        <div class="sync-btns"><button class="btn btn-primary" data-s="run">Synchroniser maintenant</button><button class="btn" data-s="copy">Copier le code</button><button class="btn btn-danger" data-s="off">Arrêter</button></div>`
+      : `
+        <p>Retrouvez vos parcours enregistrés sur un autre appareil, sans compte ni mot de passe.</p>
+        <div class="sync-btns"><button class="btn btn-primary" data-s="new">Créer mon code</button></div>
+        <p class="muted" style="margin-top:16px">J’ai déjà un code :</p>
+        <div class="sync-join"><input id="sync-in" placeholder="XXXX-XXXX-XXXX" autocomplete="off" autocapitalize="characters" maxlength="14" aria-label="Code"><button class="btn" data-s="join">Utiliser</button></div>`;
+    };
+    wrap.addEventListener('click', async ev => {
+      const b = ev.target.closest('[data-s]'); if (!b) return;
+      const s = b.dataset.s; b.disabled = true;
+      try {
+        if (s === 'new') { T.settings.set({ syncCode: SY.create() }); const r = await SY.run(); UI.toast(r.total ? 'Code créé, parcours envoyés' : 'Code créé'); }
+        else if (s === 'join') {
+          const c = SY.norm($('#sync-in', wrap).value);
+          if (!SY.valid(c)) { UI.toast('Code invalide (12 caractères)'); b.disabled = false; return; }
+          const r = await SY.run(SY.fmt(c)); T.settings.set({ syncCode: SY.fmt(c) });
+          UI.toast(r.added > 0 ? r.added + ' parcours récupéré' + (r.added > 1 ? 's' : '') : 'Code enregistré');
+        }
+        else if (s === 'run') { const r = await SY.run(); UI.toast('Synchronisé : ' + r.total + ' parcours'); }
+        else if (s === 'copy') { try { await navigator.clipboard.writeText(SY.code()); UI.toast('Code copié'); } catch (e) { UI.toast('Copie impossible'); } }
+        else if (s === 'off') { T.settings.set({ syncCode: '' }); UI.toast('Synchronisation arrêtée (vos parcours restent ici)'); }
+      } catch (e) { if (s === 'new') T.settings.set({ syncCode: '' }); fail(e); }
+      draw();
+    });
+    draw();
+    UI.modal({ title: 'Retrouver mes parcours', body: wrap, actions: [{ label: 'Fermer' }] });
+  }
+
+  function helpDialog() {
+    const rows = [
+      ['Carte', [['undo', 'Annuler', 'Annule la dernière modification (Ctrl+Z).'], ['redo', 'Rétablir', 'Rétablit ce que vous venez d’annuler (Ctrl+Y).'],
+        ['fit', 'Voir tout le parcours', 'Cadre la carte sur l’ensemble du tracé.'], ['append', 'Ajouter à la fin', 'Chaque clic ajoute un point au bout du parcours, même sur le tracé (utile pour un aller-retour).'],
+        ['slope', 'Pente', 'Colore le tracé selon la pente.'], ['layers', 'Fond de carte', 'Change l’aspect de la carte.'], ['locate', 'Me localiser', 'Centre la carte sur votre position.'],
+        ['lock', 'Verrouiller', 'Empêche toute modification du tracé par erreur.'], ['help', 'Aide', 'Affiche cette page.']]],
+      ['Panneau du parcours', [['download', 'Importer', 'Ouvre un fichier GPX pour le charger sur la carte.'], ['link', 'Partager', 'Crée un lien vers votre parcours.'],
+        ['upload', 'Exporter GPX', 'Enregistre le parcours en fichier GPX pour votre GPS ou votre montre.'], ['more', 'Plus d’options', 'Mes parcours, boucle, road-book, inverser le sens, Google Maps, réglages, tout effacer.']]]
+    ];
+    UI.modal({
+      title: 'À quoi servent les boutons ?', wide: true,
+      body: rows.map(([h, items]) => `<h3 class="help-h">${h}</h3><ul class="help-list">${items.map(([ic, n, d]) => `<li><span class="help-ic">${I(ic)}</span><div><b>${n}</b><span>${d}</span></div></li>`).join('')}</ul>`).join(''),
+      actions: [{ label: 'Compris', primary: true }]
+    });
+  }
+
   function moreMenu(btn) {
     const r = btn.getBoundingClientRect();
     const el = document.createElement('div');
@@ -531,7 +586,7 @@
       ['library', 'folder', 'Mes parcours'], ['loop', 'route', 'Créer une boucle'], ['roadbook', 'save', 'Road-book (imprimer / PDF)'],
       ['gmaps', 'gmaps', 'Importer un lien Google Maps'], ['reverse', 'swap', 'Inverser le sens'],
       ['openGmaps', 'gmaps', 'Ouvrir dans Google Maps'], ['fit', 'fit', 'Voir tout le parcours'],
-      ['settings', 'gear', 'Réglages'], ['clear', 'trash', 'Tout effacer']
+      ['sync', 'link', 'Retrouver mes parcours (code)'], ['settings', 'gear', 'Réglages'], ['clear', 'trash', 'Tout effacer']
     ];
     el.innerHTML = items.map(([a, ic, l]) => `<button data-act="${a}" class="${a === 'clear' ? 'danger' : ''}">${I(ic)}${l}</button>`).join('');
     document.body.appendChild(el);
@@ -550,6 +605,8 @@
   function act(a, el) {
     const i = el && el.dataset.i != null ? +el.dataset.i : null;
     switch (a) {
+      case 'help': helpDialog(); break;
+      case 'sync': syncDialog(); break;
       case 'lock': {
         T.settings.set({ locked: !S.locked });
         S.setLocked(!S.locked);
@@ -744,6 +801,7 @@
 
     T.app = { st, S, render, fitAll, addPoint, accent, nameLater, collapseSheet, act, guard };
     if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+    setTimeout(() => T.sync.auto(), 2500);
     T.hooks.init.forEach(f => { try { f(); } catch (e) { console.warn(e); } });
     S.on(render);
     S.load();
