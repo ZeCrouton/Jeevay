@@ -16,22 +16,51 @@
         <label class="field"><span>Départ</span><select id="lp-from">
           ${s.waypoints.length ? `<option value="first" ${o.from === 'first' ? 'selected' : ''}>Point de départ actuel</option>` : ''}
           <option value="center" ${o.from === 'center' ? 'selected' : ''}>Centre de la carte</option>
+          <option value="place" ${o.from === 'place' ? 'selected' : ''}>Un lieu (recherche)</option>
           <option value="gps">Ma position</option></select></label>
+        <div id="lp-place" ${o.from === 'place' ? '' : 'hidden'}>
+          <input id="lp-q" type="search" placeholder="Rechercher un lieu…" autocomplete="off" aria-label="Lieu de départ" value="${U.esc(o.place ? o.place.label : '')}">
+          <ul id="lp-res" class="lp-res"></ul>
+        </div>
         <label class="field"><span>Direction</span><select id="lp-dir">${DIRS.map(([v, l]) => `<option value="${v}" ${v === o.dir ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="field"><span>Préférer</span><select id="lp-road">${[T.config.kinds.auto, ...m.roads].map(r => `<option value="${r.id}" ${r.id === o.road ? 'selected' : ''}>${U.esc(r.label)}</option>`).join('')}</select></label>
         ${s.waypoints.length ? '<p class="muted small">Le parcours actuel sera remplacé (Ctrl+Z pour revenir).</p>' : ''}`,
       actions: [{ label: 'Annuler' }, {
         label: 'Générer la boucle', primary: true, onClick: root => {
           const km = U.clamp(+root.querySelector('#lp-km').value || DEF[s.mode], 2, 600);
-          last = { mode: s.mode, km, dir: root.querySelector('#lp-dir').value, road: root.querySelector('#lp-road').value, from: root.querySelector('#lp-from').value };
+          const from = root.querySelector('#lp-from').value;
+          if (from === 'place' && !place) { T.ui.toast('Choisissez un lieu de départ dans la liste', 'info', 2500); return false; }
+          last = { mode: s.mode, km, dir: root.querySelector('#lp-dir').value, road: root.querySelector('#lp-road').value, from, place };
           start(last);
         }
       }]
+    });
+    // Choix du lieu de départ par recherche
+    let place = o.place || null;
+    const dlg = document.querySelector('.dlg-wrap'), box = dlg.querySelector('#lp-place'), q = dlg.querySelector('#lp-q'), res = dlg.querySelector('#lp-res');
+    dlg.querySelector('#lp-from').addEventListener('change', e => { box.hidden = e.target.value !== 'place'; if (!box.hidden) q.focus(); });
+    let ctl = null, items = [];
+    const search = U.debounce(async () => {
+      const v = q.value.trim();
+      if (v.length < 3) { res.innerHTML = ''; return; }
+      if (ctl) ctl.abort();
+      const my = ctl = new AbortController();
+      res.innerHTML = '<li class="muted small">Recherche…</li>';
+      try { items = await T.providers.geocode.search(v, T.map.center(), my.signal); } catch (e) { if (my.signal.aborted) return; items = []; }
+      if (my !== ctl) return;
+      res.innerHTML = items.length ? items.map((r, k) => `<li><button type="button" data-k="${k}"><b>${U.esc(r.label)}</b><small>${U.esc(r.sub || '')}</small></button></li>`).join('') : '<li class="muted small">Aucun lieu trouvé</li>';
+    }, 300);
+    q.addEventListener('input', () => { place = null; search(); });
+    res.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      const r = items[+b.dataset.k]; if (!r) return;
+      place = { label: r.label, c: r.c }; q.value = r.label; res.innerHTML = '';
     });
   }
 
   function origin(o) {
     const s = T.app.st();
+    if (o.from === 'place' && o.place) return Promise.resolve(o.place.c);
     if (o.from === 'first' && s.waypoints.length) return Promise.resolve(s.waypoints[0].c);
     if (o.from === 'gps' && navigator.geolocation) {
       return new Promise(res => navigator.geolocation.getCurrentPosition(

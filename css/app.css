@@ -398,3 +398,11 @@ textarea { resize: vertical; font-family: var(--num); }
 .sync-join { display: flex; gap: 8px; }
 .sync-join input { flex: 1; min-width: 0; height: 42px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: 600 16px ui-monospace, Menlo, Consolas, monospace; letter-spacing: .06em; text-transform: uppercase; }
 .dlg .muted { color: var(--muted); font-size: 14px; }
+
+/* Boucle : recherche du départ */
+#lp-place { margin: -4px 0 12px; }
+#lp-q { width: 100%; height: 42px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: inherit; }
+.lp-res { list-style: none; margin: 6px 0 0; padding: 0; max-height: 180px; overflow: auto; }
+.lp-res button { width: 100%; text-align: left; border: 0; background: none; padding: 8px 6px; border-radius: 8px; color: var(--ink); font: inherit; }
+.lp-res button:hover { background: var(--panel-2); }
+.lp-res small { display: block; color: var(--muted); }
