@@ -1,49 +1,21 @@
 # Trajecto — itinéraires moto, vélo, running
 
-Site statique (HTML/CSS/JS, sans compilation). 100 % gratuit, sans clé ni compte.
+Crée tes itinéraires sur une carte, vois le dénivelé et les difficultés, exporte en GPX. Gratuit, sans compte.
 
-## Lancer
-- **En local** : double-cliquer sur `index.html` (Chrome ou Edge récents).
-- **En ligne** : GitHub Pages (Settings → Pages → branche main, dossier racine) ou Cloudflare Pages, aucune commande de build.
-- Le partage par lien et l'installation sur téléphone ne fonctionnent qu'en ligne (https).
+**[Ouvrir Trajecto](https://zecrouton.github.io/Trajecto/)** (s'installe aussi comme une appli sur téléphone)
 
-## Fonctions (V1)
-- Points sur la carte, déplaçables, insérables sur le tracé, suppression, annuler / rétablir (Ctrl+Z / Ctrl+Y).
-- Type de route demandé à chaque tronçon : moto (Autoroute / Nationale / Départementale / Petites routes), vélo, running, ou ligne droite.
-- Distance, durée, D+ / D−, profil altimétrique interactif, coloration par pente.
-- Difficultés : pentes raides, épingles, portions non goudronnées, péages, bacs, cols en altitude, niveau global.
-- Types de voies réellement empruntés (barre de composition).
-- Import GPX / KML / GeoJSON (plusieurs fichiers, ordre, sens, raccord par la route), liens Google Maps.
-- Street View (lien vers Google, gratuit), export GPX (trace, itinéraire ou les deux), ouverture dans Google Maps.
-- Parcours sauvegardés dans le navigateur.
+## Ce que tu peux faire
+- Poser des points sur la carte et tracer le parcours, en moto, vélo ou running.
+- Choisir le type de route préféré par tronçon (autoroute, nationale, départementale, petites routes).
+- Voir la distance, la durée, le dénivelé, le profil d'altitude et la pente le long du tracé.
+- Repérer les difficultés : pentes raides, épingles, portions non goudronnées, péages, bacs, cols.
+- Importer des tracés GPX, KML, GeoJSON ou des liens Google Maps, puis les fusionner.
+- Exporter en GPX, ouvrir dans Google Maps, voir un point en Street View.
+- Trouver stations-service, cols, panoramas, points d'eau, cafés et toilettes le long du parcours (France), avec une alerte d'autonomie en moto.
+- Consulter la météo à l'heure de passage.
+- Générer une boucle automatique, partager un parcours par lien, imprimer un road-book.
 
-## V2
-- Points d'intérêt le long du tracé (base OpenStreetMap mise à jour chaque mois par GitHub Actions, branche poi-data) : stations-service, cols, panoramas, points d'eau, cafés, réparation vélo, toilettes ; ajout comme étape.
-- Alerte d'autonomie carburant (moto, autonomie réglable).
-- Météo à l'heure de passage (Open-Meteo, 16 jours) : pluie, rafales, verglas, chaleur, arrivée après le coucher du soleil.
-- Score « plaisir moto » sur 10 (parcours et tronçons).
+Tes parcours restent dans ton navigateur.
 
-## V3
-- Partage par lien sans serveur (parcours compressé dans l'adresse).
-- Boucle automatique (distance, départ, direction, type de route).
-- Road-book imprimable / PDF (carte, profil, étapes avec heures, alertes, météo, lieux).
-- Application installable (PWA) avec ouverture hors connexion.
-
-## Architecture (pensée pour évoluer)
-```
-js/config.js                 URL des services, profils de route, couleurs  ← tout se règle ici
-js/core/   util · analysis · store (état, historique, stockage) · engine (calcul des tronçons)
-js/providers/                un fichier par service externe (interface simple, remplaçable)
-  routing-valhalla.js        route() + matchTrack()
-  elevation-openmeteo.js     get(points)
-  geocode-photon.js          search() + reverse()
-js/io/      import.js · export.js
-js/ui/      map · profile · panel · ui (fenêtres) · icons
-js/app.js   actions utilisateur et rendu
-```
-- **Passer à son propre serveur** : changer `routing.url` dans `config.js` (Valhalla auto-hébergé, même API).
-- **Partage par lien / comptes** (plus tard) : ajouter un fournisseur de stockage distant à côté de `T.storage` (ex. Cloudflare Worker + D1).
-
-## Services utilisés
-Carte OpenFreeMap (© OpenMapTiles, © contributeurs OpenStreetMap) · Itinéraires Valhalla (serveur public FOSSGIS) ·
-Altitudes Open-Meteo · Recherche Photon (Komoot). Serveurs publics : usage raisonnable, adapté à un usage privé.
+## Données et crédits
+Carte OpenFreeMap (© OpenMapTiles, © contributeurs OpenStreetMap) · itinéraires Valhalla (FOSSGIS) · météo Open-Meteo · recherche de lieux Photon (Komoot) · lieux d'intérêt : © contributeurs OpenStreetMap, licence ODbL.
