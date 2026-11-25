@@ -44,7 +44,7 @@ T.panel = (() => {
     }
     return `<div class="figs${busy ? ' busy' : ''}">
         ${big(km, 'km', 'Distance')}
-        ${big(U.fmtDur(T.days ? T.days.totalDuration(state, sum) : sum.duration).replace(/ (h|min)/g, '<small>$1</small>'), '', T.settings.get().pauses ? 'Durée avec pauses' : 'Durée estimée')}
+        ${big(U.fmtDur(T.days ? T.days.totalDuration(state, sum) : sum.duration).replace(/ (h|min)/g, '<small>$1</small>'), '', T.days && T.days.hasPauses(state) ? 'Durée avec pauses' : 'Durée estimée')}
         ${big('+' + U.nf(sum.up), 'm', 'Dénivelé +')}
         ${big('−' + U.nf(sum.down), 'm', 'Dénivelé −')}
       </div>

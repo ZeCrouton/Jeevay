@@ -255,14 +255,20 @@
     el.innerHTML = `<div class="pop-h"><b>${U.esc(label)}</b></div>
       ${S.locked ? '<p class="pop-m">Tracé verrouillé</p>' : w.locked ? '<p class="pop-m">Extrémité d’un tracé importé</p>' : '<p class="pop-m">Glissez le point pour le déplacer</p>'}
       <div class="pop-a">
-        ${i > 0 && i < s.waypoints.length - 1 ? `<button class="btn btn-sm${w.night ? ' btn-night' : ''}" data-a="night">${I('bed')}${w.night ? 'Retirer la nuit' : 'Nuit ici'}</button>` : ''}
+        ${i > 0 && i < s.waypoints.length - 1 && !w.pause ? `<button class="btn btn-sm${w.night ? ' btn-night' : ''}" data-a="night">${I('bed')}${w.night ? 'Retirer la nuit' : 'Nuit ici'}</button>` : ''}
+        ${i > 0 && i < s.waypoints.length - 1 && !w.night ? `<button class="btn btn-sm${w.pause ? ' btn-pause' : ''}" data-a="pause">${I('cup')}${w.pause ? 'Retirer la pause' : 'Pause ici'}</button>` : ''}
         <a class="btn btn-sm" href="${U.streetViewUrl(w.c)}" target="_blank" rel="noopener">${I('eye')}Street View</a>
         ${S.locked ? '' : `<button class="btn btn-sm btn-danger" data-a="del">${I('trash')}Supprimer</button>`}
       </div>
-      ${w.night ? `<div class="stay"><label>Établissement<input data-stay="name" maxlength="80" value="${U.esc(w.stay && w.stay.name || '')}" placeholder="Nom de l’hôtel, gîte, camping…"></label>
+      ${w.night || w.pause ? `<div class="stay">${w.pause ? `<label>Durée de la pause (minutes)<input type="number" data-pausemin min="5" max="600" step="5" inputmode="numeric" value="${w.pause}"></label>` : ''}<label>${w.night ? 'Établissement' : 'Lieu'}<input data-stay="name" maxlength="80" value="${U.esc(w.stay && w.stay.name || '')}" placeholder="${w.night ? 'Nom de l’hôtel, gîte, camping…' : 'Restaurant, café, point de vue…'}"></label>
         <label>Adresse<input data-stay="addr" maxlength="140" value="${U.esc(w.stay && w.stay.addr || '')}" placeholder="Adresse"></label>
-        <label>Notes<textarea data-stay="note" rows="3" maxlength="500" placeholder="Type de logement, à prévoir (maillot, serviettes…), réservation, avis…">${U.esc(w.stay && w.stay.note || '')}</textarea></label></div>` : ''}`;
+        <label>Notes<textarea data-stay="note" rows="3" maxlength="500" placeholder="${w.night ? 'Type de logement, à prévoir (maillot, serviettes…), réservation, avis…' : 'Repas, réservation, à voir sur place…'}">${U.esc(w.stay && w.stay.note || '')}</textarea></label></div>` : ''}`;
     el.addEventListener('change', ev => {
+      if (ev.target.dataset && 'pausemin' in ev.target.dataset) {
+        const m = Math.min(600, Math.max(5, Math.round(+ev.target.value) || 30));
+        S.commit(x => { x.waypoints = x.waypoints.map(p => p.id === id ? { ...p, pause: m } : p); }, true);
+        return;
+      }
       const f = ev.target.dataset && ev.target.dataset.stay;
       if (!f) return;
       const v = ev.target.value.trim();
@@ -278,6 +284,13 @@
     const del = el.querySelector('[data-a="del"]');
     if (del) del.addEventListener('click', () => removePoint(id));
     const nt = el.querySelector('[data-a="night"]');
+    const ps = el.querySelector('[data-a="pause"]');
+    if (ps) ps.addEventListener('click', () => {
+      M.closePopup();
+      const dm = Math.max(5, +T.settings.get().pauseMin || 30);
+      S.commit(x => { x.waypoints = x.waypoints.map(p => p.id === id ? { ...p, pause: p.pause ? undefined : Math.max(dm, 30), stay: p.pause ? undefined : p.stay } : p); }, true);
+      UI.toast(w.pause ? 'Pause retirée' : 'Pause ajoutée : elle compte dans la durée du parcours');
+    });
     // Nuit : simple repère de planification, permis même tracé verrouillé
     if (nt) nt.addEventListener('click', () => {
       M.closePopup();

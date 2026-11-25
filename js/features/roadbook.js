@@ -49,6 +49,8 @@
     const poiRow = p => `<tr><td class="n">km ${U.nf(p.d / 1000, 1)}</td><td>${U.esc(T.providers.poi.CATS[p.cat].label.replace(/s$/, ''))}</td><td>${U.esc(p.name)}</td><td class="n">à ${U.fmtKm(p.off)}</td></tr>`;
     const label = m => m.wi >= 0 ? name(m.wi) : `km ${U.nf(m.d / 1000)}`;
     const pois = T.poi ? T.poi.visible(s).filter(p => ['fuel', 'pass', 'water'].includes(p.cat)).slice(0, 60) : [];
+    const pauseHtml = x => { const y = x.w.stay || {}; return `<div class="stay pause"><b>Pause — ${U.esc(y.name || name(x.i))}</b> · ${x.w.pause} min${y.addr ? `<div>${U.esc(y.addr)}</div>` : ''}${y.note ? `<div class="note">${U.esc(y.note).replace(/\n/g, '<br>')}</div>` : ''}</div>`; };
+    const single = !multi && T.days ? T.days.stopsIn(s, { a: 0, b: comb.total + 2 }) : [];
     const stayHtml = d => {
       const w = d.i < D.length - 1 && d.to.wi >= 0 ? s.waypoints[d.to.wi] : null, y = w && w.stay || {};
       if (!w) return d.i < D.length - 1 ? `<div class="stay"><b>Nuit</b> autour du km ${U.nf(d.b / 1000)} <small>(à préciser en posant une étape « Nuit »)</small></div>` : '';
@@ -65,6 +67,7 @@
         <table>${head}<tbody>${legs.map(i => legRow(s.legs[i], i, d.i)).join('')}</tbody></table>
         ${wr.length ? `<h3>Météo</h3><table>${wxHead}<tbody>${wxTable(wr)}</tbody></table>` : ''}
         ${ps.length ? `<h3>Sur le parcours</h3><table><tbody>${ps.map(poiRow).join('')}</tbody></table>` : ''}
+        ${T.days.stopsIn(s, d).map(pauseHtml).join('')}
         ${stayHtml(d)}</section>`;
     }).join('');
     const css = `@page{size:A4;margin:14mm}*{box-sizing:border-box}body{font:11pt/1.4 Barlow,system-ui,sans-serif;color:#14161b;margin:0 auto;max-width:190mm;padding:12px}
@@ -77,7 +80,7 @@
       .warn{color:#a61e1e}.bar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:8px}.bar button{font:inherit;padding:8px 14px;border-radius:8px;border:1px solid #14161b;background:#14161b;color:#fff;cursor:pointer}
       .figs.f4{grid-template-columns:repeat(4,1fr)}.day{break-inside:auto}.day h2{font-size:15pt;background:${T.app.accent()}22;padding:5px 8px;border-radius:6px;border-bottom:0}
       h3{font-size:11pt;margin:12px 0 4px}.route{font-weight:600;margin:4px 0}
-      .stay{border:1px solid #e3e6ea;border-left:4px solid #2f3a8f;border-radius:6px;padding:8px 10px;margin-top:10px;break-inside:avoid}.stay .note{color:#3b4250;margin-top:3px}
+      .stay{border:1px solid #e3e6ea;border-left:4px solid #2f3a8f;border-radius:6px;padding:8px 10px;margin-top:10px;break-inside:avoid}.stay.pause{border-left-color:#e8590c}.stay .note{color:#3b4250;margin-top:3px}
       small{color:#5f6672}@media print{.day{break-before:auto}.bar{display:none}body{padding:0}h2{break-after:avoid}tr{break-inside:avoid}}`;
     return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Road-book — ${U.esc(s.name)}</title>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700&display=swap"><style>${css}</style></head><body>
@@ -91,6 +94,7 @@
       ${profImg ? `<img class="prof" src="${profImg}" alt="Profil altimétrique">` : ''}
       ${multi ? daysHtml : `<h2>Étapes</h2><table>${head}<tbody>${rows}</tbody></table>`}
       ${sum.alerts.length ? `<h2>Points d’attention</h2><ul>${sum.alerts.map(a => `<li class="${a.lvl === 'warn' ? 'warn' : ''}">${U.esc(a.text)}</li>`).join('')}</ul>` : ''}
+      ${single.length ? `<h2>Pauses</h2>${single.map(pauseHtml).join('')}` : ''}
       ${wx && !multi ? `<h2>Météo prévue</h2><table>${wxHead}<tbody>${wx}</tbody></table>` : ''}
       ${pois.length && !multi ? `<h2>Sur le parcours</h2><table><tbody>${pois.map(poiRow).join('')}</tbody></table>` : ''}
       <p class="sub" style="margin-top:16px">Créé avec ${T.config.appName} · données © contributeurs OpenStreetMap · prévisions indicatives, vérifiez avant de partir.</p>

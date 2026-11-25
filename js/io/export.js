@@ -27,7 +27,7 @@ T.io.export = (() => {
     const wd = i => i === n - 1 ? comb.total : (comb.starts[i] ?? 0);
     // Étapes : sans les points techniques (coupures GPS comblées), 99 au plus (limite de Liberty Rider et de nombreux GPS)
     const real = state.waypoints.map((w, i) => ({ w, i })).filter(({ w, i }) => !w.gap || i === 0 || i === n - 1);
-    real.forEach((x, j) => { x.label = wpName(x.w, j, real.length) + (x.w.night && !x.w.name ? ' (nuit)' : ''); });
+    real.forEach((x, j) => { x.label = wpName(x.w, j, real.length) + (x.w.night && !x.w.name ? ' (nuit)' : '') + (x.w.pause && !x.w.name ? ' (pause)' : ''); });
     const mine = real.filter(({ i }) => inR(wd(i)));
     if (opts.wpt) thin(mine, MAX).forEach(({ w, label }) => L.push(pt('wpt', w.c, `<name>${U.esc(label)}</name>`)));
     if (opts.rte) {

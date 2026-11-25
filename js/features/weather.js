@@ -20,7 +20,7 @@
       const L = s.legs[i], a = comb.starts[i], b = comb.starts[i + 1];
       const dur = L.status !== 'ok' ? 0 : L.kind === 'route' && L.duration ? L.duration
         : L.distance / 1000 / T.analysis.speedKmh(s.mode) * 3600;
-      if (d <= b || i === s.legs.length - 1) return t + dur * U.clamp((d - a) / Math.max(1, b - a), 0, 1);
+      if (d <= b || i === s.legs.length - 1) { const m = t + dur * U.clamp((d - a) / Math.max(1, b - a), 0, 1); return m + (T.days ? T.days.pausesFor(m) + T.days.stopSec(s, 0, d) : 0); }
       t += dur;
     }
     return t;

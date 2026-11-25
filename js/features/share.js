@@ -27,7 +27,7 @@
   function pack(s, withStay) {
     const y = {};
     if (withStay) s.waypoints.forEach((w, i) => {
-      if (!w.night || !w.stay) return;
+      if (!(w.night || w.pause) || !w.stay) return;
       const v = ['name', 'addr', 'note'].map(f => String(w.stay[f] || '').slice(0, CUT[f]));
       if (v.some(Boolean)) y[i] = v;
     });
@@ -38,7 +38,8 @@
       l: s.legs.map(L => L.kind === 'track'
         ? ['t', U.encode(U.simplify(L.coords, 5), 5), L.name || '']
         : L.kind === 'line' ? ['l'] : ['r', L.road]),
-      ...(Object.keys(y).length ? { y } : {})
+      ...(Object.keys(y).length ? { y } : {}),
+      ...(s.waypoints.some(w => w.pause) ? { p: Object.fromEntries(s.waypoints.map((w, i) => [i, w.pause]).filter(x => x[1])) } : {})
     };
   }
 
@@ -47,8 +48,8 @@
     const cs = U.decode(o.w, 5), lk = String(o.k || '');
     const waypoints = cs.map((c, i) => {
       const f = +lk[i] || 0, y = o.y && o.y[i], stay = {};
-      if (y && (f & 4)) ['name', 'addr', 'note'].forEach((k, j) => { if (y[j]) stay[k] = String(y[j]).slice(0, CUT[k]); });
-      return { id: U.uid(), c, locked: !!(f & 1), name: null, ...(f & 2 ? { gap: true } : {}), ...(f & 4 ? { night: true } : {}), ...(Object.keys(stay).length ? { stay } : {}) };
+      if (y && ((f & 4) || (o.p && +o.p[i] > 0))) ['name', 'addr', 'note'].forEach((k, j) => { if (y[j]) stay[k] = String(y[j]).slice(0, CUT[k]); });
+      return { id: U.uid(), c, locked: !!(f & 1), name: null, ...(f & 2 ? { gap: true } : {}), ...(f & 4 ? { night: true } : {}), ...(o.p && +o.p[i] > 0 ? { pause: Math.min(600, +o.p[i]) } : {}), ...(Object.keys(stay).length ? { stay } : {}) };
     });
     const legs = [];
     for (let i = 0; i < waypoints.length - 1; i++) {

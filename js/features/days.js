@@ -19,6 +19,14 @@
     return Math.floor(sec / every) * len;
   }
 
+  // Pauses posées sur le parcours (étapes « Pause », durée en minutes) : secondes d'arrêt entre les distances a et b (a exclu, b exclu)
+  function stopSec(s, comb, a, b) {
+    let sec = 0;
+    s.waypoints.forEach((w, i) => { if (w.pause && i > 0 && i < s.waypoints.length - 1 && comb.starts[i] > a + 1 && comb.starts[i] < b - 1) sec += w.pause * 60; });
+    return sec;
+  }
+  const hasPauses = s => s.waypoints.some(w => w.pause) || !!T.settings.get().pauses;
+
   // Fins de journée (distance en m) : étapes « Nuit », sinon découpage automatique si activé
   function cutsOf(s, comb) {
     const n = s.waypoints.length, cuts = [];
@@ -77,7 +85,7 @@
         if (f > 0.999 && L.an && L.an.hasElev) { up += L.an.up || 0; down += L.an.down || 0; }
         else { const c = climb(comb, Math.max(a, la), Math.min(b, lb)); up += c.up; down += c.down; }
       });
-      out.push({ i: k, a, b, dist, dur, pause: pausesFor(dur), up, down, from: marks[k], to: marks[k + 1], auto });
+      out.push({ i: k, a, b, dist, dur, pause: pausesFor(dur) + stopSec(s, comb, a, b), up, down, from: marks[k], to: marks[k + 1], auto });
     }
     // Horaires
     const first = T.weather ? T.weather.departure() : new Date();
@@ -106,17 +114,16 @@
       const la = comb.starts[i], lb = comb.starts[i + 1], a = Math.max(day.a, la), b = Math.min(d, day.b, lb);
       if (b > a && lb > la) t += legDur(L, s.mode) * (b - a) / (lb - la);
     });
-    return new Date(day.start.getTime() + (t + pausesFor(t)) * 1000);
+    return new Date(day.start.getTime() + (t + pausesFor(t) + stopSec(s, comb, day.a, d)) * 1000);
   }
 
   // Signature des horaires (pour savoir si la météo est à jour)
-  const schedSig = s => days(s, A.combine(s)).map(d => d.start.getTime()).join(',');
+  const schedSig = s => days(s, A.combine(s)).map(d => d.start.getTime()).join(',') + '~' + s.waypoints.map(w => w.pause || '').join(',');
 
   // Durée totale affichée : avec les pauses si l'option est activée
   function totalDuration(s, sum) {
-    if (!T.settings.get().pauses) return sum.duration;
-    const D = days(s, A.combine(s));
-    return D.length ? D.reduce((t, d) => t + d.dur + d.pause, 0) : sum.duration + pausesFor(sum.duration);
+    const comb = A.combine(s), D = days(s, comb);
+    return D.length ? D.reduce((t, d) => t + d.dur + d.pause, 0) : sum.duration + pausesFor(sum.duration) + stopSec(s, comb, 0, comb.total + 2);
   }
 
   const W = () => T.weather;
@@ -143,6 +150,10 @@
       <span class="${rain >= 50 ? 'hi' : ''}">pluie ${rain} %</span><span>rafales ${Math.round(gust)} km/h</span></div>`;
   }
 
+  const stopsIn = (s, d) => {
+    const comb = A.combine(s);
+    return s.waypoints.map((w, i) => ({ w, i, p: comb.starts[i] })).filter(x => x.w.pause && x.i > 0 && x.i < s.waypoints.length - 1 && x.p > d.a + 1 && x.p < d.b - 1);
+  };
   const label = (s, m) => m.wi >= 0 ? T.io.export.wpName(s.waypoints[m.wi], m.wi, s.waypoints.length) : `km ${U.nf(m.d / 1000)}`;
   const sleepNear = k => (T.poi && T.poi.data.items || []).filter(it => it.cat === 'sleep' && it.night === k).length;
 
@@ -157,6 +168,7 @@
         <button class="day-h" data-act="dayFocus" data-i="${d.i}"><b>Jour ${d.i + 1}</b><span>${U.esc(label(s, d.from))}<i>→</i>${U.esc(label(s, d.to))}</span></button>
         <div class="day-time">${dayTime(d)}</div>
         ${dayWx(d)}
+        ${stopsIn(s, d).map(x => `<p class="day-stay">${I('cup', 'sm')} Pause : <b>${U.esc((x.w.stay && x.w.stay.name) || T.io.export.wpName(x.w, x.i, s.waypoints.length))}</b> · ${x.w.pause} min</p>`).join('')}
         ${d.i < D.length - 1 && d.to.wi >= 0 && s.waypoints[d.to.wi].stay && s.waypoints[d.to.wi].stay.name ? `<p class="day-stay">${I('bed', 'sm')} Nuit : <b>${U.esc(s.waypoints[d.to.wi].stay.name)}</b></p>` : ''}
         <div class="day-figs"><span>${U.fmtKm(d.dist)}</span><span>${U.fmtDur(d.dur + d.pause)}${d.pause ? ` <small>dont ${U.fmtDur(d.pause)} de pause</small>` : ''}</span><span>+${U.nf(d.up)} m</span></div>
         <div class="day-a">${d.i < D.length - 1 ? `<button class="mini" data-act="daySleep" data-i="${d.i}">${I('bed', 'sm')}Dormir ici${n ? ` <b>${n}</b>` : ''}</button>` : ''}<button class="mini" data-act="dayGpx" data-i="${d.i}">${I('upload', 'sm')}GPX du jour</button></div></li>`;
@@ -192,5 +204,5 @@
     }
   });
 
-  T.days = { days: s => days(s, A.combine(s)), nights: s => nights(s, A.combine(s)), dateAt: (s, d, k) => dateAt(s, A.combine(s), d, k), schedSig, totalDuration, pausesFor, dayKm, DEF_KM };
+  T.days = { stopSec: (s, a, b) => stopSec(s, A.combine(s), a, b), hasPauses, stopsIn, days: s => days(s, A.combine(s)), nights: s => nights(s, A.combine(s)), dateAt: (s, d, k) => dateAt(s, A.combine(s), d, k), schedSig, totalDuration, pausesFor, dayKm, DEF_KM };
 })();

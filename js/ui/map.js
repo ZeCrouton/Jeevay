@@ -64,15 +64,15 @@ T.map = (() => {
     wc: ['M8 4a2 2 0 1 0 0 .01M5 21v-8l-1-3h8l-1 3v8M17 4a2 2 0 1 0 0 .01M14.500 21v-6h-1.500l1.800-5h4.400l1.800 5H19.500v6']
   };
   function poiIcon(color, paths) {
-    const S = 44, c = document.createElement('canvas');
+    const S = 68, c = document.createElement('canvas');
     c.width = c.height = S;
     const g = c.getContext('2d');
-    g.shadowColor = 'rgba(0,0,0,.35)'; g.shadowBlur = 4; g.shadowOffsetY = 1;
-    g.beginPath(); g.arc(S / 2, S / 2, 18, 0, 7); g.fillStyle = color; g.fill();
+    g.shadowColor = 'rgba(0,0,0,.35)'; g.shadowBlur = 5; g.shadowOffsetY = 1.5;
+    g.beginPath(); g.arc(S / 2, S / 2, 29, 0, 7); g.fillStyle = color; g.fill();
     g.shadowColor = 'transparent';
-    g.lineWidth = 3; g.strokeStyle = '#fff'; g.stroke();
-    g.save(); g.translate(S / 2 - 12 * 0.95, S / 2 - 12 * 0.95); g.scale(0.95, 0.95);
-    g.strokeStyle = '#fff'; g.fillStyle = '#fff'; g.lineWidth = 2.2; g.lineCap = g.lineJoin = 'round';
+    g.lineWidth = 4.5; g.strokeStyle = '#fff'; g.stroke();
+    g.save(); g.translate(S / 2 - 12 * 1.5, S / 2 - 12 * 1.5); g.scale(1.5, 1.5);
+    g.strokeStyle = '#fff'; g.fillStyle = '#fff'; g.lineWidth = 2.1; g.lineCap = g.lineJoin = 'round';
     (paths || []).forEach(d => g.stroke(new Path2D(d)));
     g.restore();
     return g.getImageData(0, 0, S, S);
@@ -96,7 +96,7 @@ T.map = (() => {
     Object.keys(CATS).forEach(k => { const id = 'tj-poi-' + k; if (!map.hasImage(id)) map.addImage(id, poiIcon(CATS[k].color, GLYPH[k]), { pixelRatio: 2 }); });
     map.addLayer({ id: 'tj-poi', type: 'symbol', source: 'tj-poi',
       layout: { 'icon-image': ['concat', 'tj-poi-', ['get', 'cat']], 'icon-allow-overlap': true, 'icon-ignore-placement': true,
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 7, 0.62, 13, 0.95] } });
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 0.8, 11, 1, 15, 1.2] } });
     // Points d'attention : triangles « ! » (rouge = alerte, ambre = information), pour ne pas les confondre avec les lieux (ronds colorés)
     for (const [id, fill, ink] of [['tj-warn', '#d92d20', '#fff'], ['tj-info', '#f5a300', '#14161b']]) if (!map.hasImage(id)) map.addImage(id, alertIcon(fill, ink), { pixelRatio: 2 });
     map.addLayer({ id: 'tj-alerts', type: 'symbol', source: 'tj-alerts',
@@ -174,10 +174,11 @@ T.map = (() => {
       const kind = n === 1 ? 'start' : i === 0 ? 'start' : i === n - 1 ? 'end' : 'mid';
       const gap = w.gap && kind === 'mid';
       if (kind === 'mid' && !gap) num++;
-      el.className = `wp wp-${kind}${w.locked ? ' wp-locked' : ''}${gap ? ' wp-gap' : ''}${w.night && kind === 'mid' ? ' wp-night' : ''}`;
+      el.className = `wp wp-${kind}${w.locked ? ' wp-locked' : ''}${gap ? ' wp-gap' : ''}${w.night && kind === 'mid' ? ' wp-night' : ''}${w.pause && kind === 'mid' ? ' wp-pause' : ''}`;
       if (w.night && kind === 'mid') el.innerHTML = '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M13 9a7.500 7.500 0 1 0 9 10.500A8.500 8.500 0 0 1 13 9Z" fill="#fff"/><text x="19" y="15" font-size="12" font-weight="800" fill="#ffd43b" font-family="system-ui,sans-serif">z</text><text x="24.5" y="9" font-size="8.5" font-weight="800" fill="#ffd43b" font-family="system-ui,sans-serif">z</text></svg>';
+      else if (w.pause && kind === 'mid') el.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9Z"/><path d="M17 10h1.500a2.500 2.500 0 0 1 0 5H17M8 3v3M12 3v3"/></svg>';
       else el.textContent = i === 0 ? 'D' : i === n - 1 ? 'A' : gap ? '' : String(num);
-      el.title = gap ? 'Coupure du signal GPS, comblée par la route' : (w.night && kind === 'mid' ? 'Nuit — ' : '') + (w.name ? w.name + ' — ' : '') + (w.locked ? 'extrémité d’un tracé importé' : 'glisser pour déplacer');
+      el.title = gap ? 'Coupure du signal GPS, comblée par la route' : (w.night && kind === 'mid' ? 'Nuit — ' : '') + (w.pause && kind === 'mid' ? `Pause ${w.pause} min — ` : '') + (w.name ? w.name + ' — ' : '') + (w.locked ? 'extrémité d’un tracé importé' : 'glisser pour déplacer');
       m.setDraggable(!w.locked && !(h.isLocked && h.isLocked()));
       const p = m.getLngLat();
       if (Math.abs(p.lng - w.c[0]) > 1e-9 || Math.abs(p.lat - w.c[1]) > 1e-9) m.setLngLat(w.c);
