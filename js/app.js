@@ -329,7 +329,7 @@
     M.syncMarkers(s.waypoints);
     M.setAlerts(sum.alerts.map(a => {
       const c = U.at(comb.coords, comb.cum, a.d);
-      return c ? { type: 'Feature', geometry: { type: 'Point', coordinates: c }, properties: { text: a.text, color: a.lvl === 'warn' ? '#e03131' : '#1f5fbf' } } : null;
+      return c ? { type: 'Feature', geometry: { type: 'Point', coordinates: c }, properties: { text: a.text, lvl: a.lvl } } : null;
     }).filter(Boolean));
 
     const has = s.waypoints.length > 0;

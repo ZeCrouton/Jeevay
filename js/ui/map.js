@@ -34,6 +34,24 @@ T.map = (() => {
 
   const box = (p, r) => [[p.x - r, p.y - r], [p.x + r, p.y + r]];
 
+  // Icône de point d'attention dessinée à la volée : triangle arrondi, liseré blanc, point d'exclamation
+  function alertIcon(fill, ink) {
+    const S = 52, c = document.createElement('canvas');
+    c.width = c.height = S;
+    const g = c.getContext('2d');
+    g.lineJoin = 'round'; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(S / 2, 6); g.lineTo(S - 6, S - 9); g.lineTo(6, S - 9); g.closePath();
+    g.shadowColor = 'rgba(0,0,0,.35)'; g.shadowBlur = 4; g.shadowOffsetY = 1;
+    g.lineWidth = 9; g.strokeStyle = '#fff'; g.stroke();
+    g.shadowColor = 'transparent';
+    g.fillStyle = fill; g.fill();
+    g.lineWidth = 3; g.strokeStyle = fill; g.stroke();
+    g.strokeStyle = ink; g.fillStyle = ink; g.lineWidth = 4.5;
+    g.beginPath(); g.moveTo(S / 2, 19); g.lineTo(S / 2, 32); g.stroke();
+    g.beginPath(); g.arc(S / 2, 38.5, 2.6, 0, 7); g.fill();
+    return g.getImageData(0, 0, S, S);
+  }
+
   function addLayers() {
     if (map.getSource('tj-legs')) return;
     map.addSource('tj-legs', { type: 'geojson', data: empty() });
@@ -50,8 +68,11 @@ T.map = (() => {
     map.addLayer({ id: 'tj-hit', type: 'line', source: 'tj-legs', paint: { 'line-color': '#000', 'line-opacity': 0, 'line-width': 22 } });
     map.addLayer({ id: 'tj-poi', type: 'circle', source: 'tj-poi',
       paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 4, 13, 7], 'circle-color': ['get', 'color'], 'circle-stroke-color': '#fff', 'circle-stroke-width': 2 } });
-    map.addLayer({ id: 'tj-alerts', type: 'circle', source: 'tj-alerts',
-      paint: { 'circle-radius': 6, 'circle-color': ['get', 'color'], 'circle-stroke-color': '#fff', 'circle-stroke-width': 2 } });
+    // Points d'attention : triangles « ! » (rouge = alerte, ambre = information), pour ne pas les confondre avec les lieux (ronds colorés)
+    for (const [id, fill, ink] of [['tj-warn', '#d92d20', '#fff'], ['tj-info', '#f5a300', '#14161b']]) if (!map.hasImage(id)) map.addImage(id, alertIcon(fill, ink), { pixelRatio: 2 });
+    map.addLayer({ id: 'tj-alerts', type: 'symbol', source: 'tj-alerts',
+      layout: { 'icon-image': ['match', ['get', 'lvl'], 'warn', 'tj-warn', 'tj-info'], 'icon-allow-overlap': true, 'icon-ignore-placement': true,
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 7, 0.8, 13, 1] } });
     map.addLayer({ id: 'tj-hover', type: 'circle', source: 'tj-hover',
       paint: { 'circle-radius': 7, 'circle-color': '#fff', 'circle-stroke-color': ['get', 'color'], 'circle-stroke-width': 4 } });
   }
