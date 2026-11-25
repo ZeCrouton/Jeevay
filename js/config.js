@@ -5,7 +5,7 @@ window.T = window.T || {};
 
 T.config = {
   appName: 'Jeevay',
-  version: '1.7.5',
+  version: '1.7.6',
   storagePrefix: 'trajecto.',
 
   map: {
@@ -30,7 +30,7 @@ T.config = {
   // Synchronisation par code : Cloudflare Worker gratuit (dossier worker/)
   sync: { url: 'https://jeevay-sync.nvz-photos.workers.dev' },
 
-  poi: { bases: ['https://raw.githubusercontent.com/ZeCrouton/Trajecto/poi-data/poi/', 'https://cdn.jsdelivr.net/gh/ZeCrouton/Trajecto@poi-data/poi/'] },
+  poi: { bases: ['https://raw.githubusercontent.com/ZeCrouton/Jeevay/poi-data/poi/', 'https://cdn.jsdelivr.net/gh/ZeCrouton/Jeevay@poi-data/poi/'] },
   // Prévisions météo (Open-Meteo, gratuit, 16 jours)
   weather: { url: 'https://api.open-meteo.com/v1/forecast', days: 16 },
 

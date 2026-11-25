@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Construit la base de lieux de Trajecto à partir d'un export osmium (GeoJSON séquentiel).
+"""Construit la base de lieux de Jeevay à partir d'un export osmium (GeoJSON séquentiel).
 Entrée : fichier .geojsonseq ; sortie : dossier avec index.json et un fichier par case de 0,25°.
 Format d'une case : {"v":1,"p":[[cat, lon, lat, nom, extra], ...]}  (extra : dict court ou 0)."""
 import json, math, os, sys, datetime

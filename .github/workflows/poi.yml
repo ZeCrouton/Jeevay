@@ -1,4 +1,4 @@
-# Base de lieux de Trajecto : chaque mois, extrait les lieux utiles des données OpenStreetMap
+# Base de lieux de Jeevay : chaque mois, extrait les lieux utiles des données OpenStreetMap
 # (Geofabrik, France) et les publie sur la branche « poi-data » (sans historique, remplacée à chaque fois).
 name: Base de lieux
 on:
