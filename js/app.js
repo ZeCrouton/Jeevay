@@ -143,7 +143,7 @@
   }
   const countGaps = c => { let n = 0; for (let i = 1; i < c.length; i++) if (U.dist(c[i - 1], c[i]) > GAP) n++; return n; };
 
-  function addItems(items, { replace, connect, fill }) {
+  function addItems(items, { replace, connect, fill, snap }) {
     if (guard()) return;
     S.commit(s => {
       if (replace) { s.waypoints = []; s.legs = []; }
@@ -170,7 +170,7 @@
         }
         const b = { id: U.uid(), c: end, locked: true, name: null, gap: pk < parts.length - 1 || undefined };
         s.waypoints.push(b);
-        s.legs.push({ ...E.makeLeg(a, b, s, null), kind: 'track', road: null, name: it.name, coords: [a.c].concat(coords.slice(1, -1), [b.c]) });
+        s.legs.push({ ...E.makeLeg(a, b, s, null), kind: 'track', road: null, name: it.name, snap: !!snap, coords: [a.c].concat(coords.slice(1, -1), [b.c]) });
         });
       }
     });
@@ -445,6 +445,7 @@
             <button class="icon-btn" data-rv="${k}" aria-label="Inverser le sens">${I('swap')}</button>
           </span></li>`).join('')}</ul>
         <button class="btn btn-sm" data-more="1">${I('plus')}Ajouter un autre fichier</button>
+        <label class="chk"><input type="checkbox" id="imp-snap" ${T.settings.get().snapTracks !== false ? 'checked' : ''}> Recaler les tracés sur les routes (corrige les raccourcis des fichiers GPS peu précis)</label>
         <label class="chk"><input type="checkbox" id="imp-fill" ${T.settings.get().fillGaps !== false ? 'checked' : ''}> Combler les coupures du signal GPS par la route (sinon en ligne droite)</label>
         <label class="chk"><input type="checkbox" id="imp-connect" ${T.settings.get().autoConnect ? 'checked' : ''}> Relier les tracés entre eux par la route (sinon en ligne droite)</label>
         ${hasRoute ? '<label class="chk"><input type="checkbox" id="imp-replace"> Remplacer le parcours actuel (sinon, ajout à la fin)</label>' : ''}`;
@@ -482,8 +483,9 @@
           if (!pick.length) { UI.toast('Aucun tracé sélectionné', 'error'); return false; }
           const connect = $('#imp-connect', root).checked, rep = $('#imp-replace', root);
           const fill = $('#imp-fill', root).checked;
-          T.settings.set({ autoConnect: connect, fillGaps: fill });
-          addItems(pick, { replace: rep ? rep.checked : false, connect, fill });
+          const snap = $('#imp-snap', root).checked;
+          T.settings.set({ autoConnect: connect, fillGaps: fill, snapTracks: snap });
+          addItems(pick, { replace: rep ? rep.checked : false, connect, fill, snap });
           UI.toast(`${pick.length} élément${pick.length > 1 ? 's' : ''} importé${pick.length > 1 ? 's' : ''}`);
         }
       }]

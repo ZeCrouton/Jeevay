@@ -83,15 +83,25 @@ T.engine = (() => {
         coords = [L.fromC, L.toC];
       } else {
         coords = L.coords;
-        try { edges = await T.providers.routing.matchTrack(coords, L.mode, ctrl.signal); }
-        catch (e) { if (e.name === 'AbortError') throw e; }
+        try {
+          const m = await T.providers.routing.matchTrack(coords, L.mode, ctrl.signal, !!L.snap);
+          if (m) {
+            edges = m.edges;
+            // Recalage sur les routes : accepté seulement s'il reste fidèle au fichier (sinon tracé d'origine)
+            if (L.snap && m.coords && (m.checked || T.providers.routing.snapOk(coords, m.coords))) {
+              const s = m.coords.slice();
+              s[0] = coords[0]; s[s.length - 1] = coords[coords.length - 1];
+              coords = s;
+            }
+          }
+        } catch (e) { if (e.name === 'AbortError') throw e; }
       }
       const c = U.cum(coords), distance = c[c.length - 1] || 0;
       let samples = null, elevErr = false;
       try { samples = await samplesFor(coords, distance, ctrl.signal); }
       catch (e) { if (e.name === 'AbortError') throw e; elevErr = true; }
       const an = T.analysis.leg(coords, samples, edges, distance);
-      apply(L, { status: 'ok', coords, distance, duration, samples, an, elevErr });
+      apply(L, { status: 'ok', coords, distance, duration, samples, an, elevErr, snap: false });
     } catch (e) {
       if (e.name === 'AbortError') return;
       const msg = e instanceof TypeError ? 'connexion au serveur impossible' : (e.message || 'erreur inconnue');
