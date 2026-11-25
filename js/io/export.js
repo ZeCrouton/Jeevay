@@ -9,6 +9,9 @@ T.io.export = (() => {
     if (w.name) return w.name;
     return i === 0 ? 'Départ' : i === n - 1 ? 'Arrivée' : 'Étape ' + i;
   }
+  const MAX = 99;
+  // Garde au plus « max » éléments, en conservant le premier et le dernier, répartis régulièrement
+  const thin = (arr, max) => arr.length <= max ? arr : Array.from({ length: max }, (_, k) => arr[Math.round(k * (arr.length - 1) / (max - 1))]);
   const pt = (tag, c, inner = '') => `<${tag} lat="${c[1].toFixed(6)}" lon="${c[0].toFixed(6)}">${inner}</${tag}>`;
 
   function gpx(state, opts) {
@@ -18,20 +21,26 @@ T.io.export = (() => {
       `<gpx version="1.1" creator="${T.config.appName}" xmlns="http://www.topografix.com/GPX/1/1">`,
       `<metadata><name>${name}</name><time>${new Date().toISOString()}</time></metadata>`
     ];
-    if (opts.wpt) state.waypoints.forEach((w, i) => L.push(pt('wpt', w.c, `<name>${U.esc(wpName(w, i, n))}</name>`)));
+    // Étapes : sans les points techniques (coupures GPS comblées), 99 au plus (limite de Liberty Rider et de nombreux GPS)
+    const real = state.waypoints.map((w, i) => ({ w, i })).filter(({ w, i }) => !w.gap || i === 0 || i === n - 1);
+    real.forEach((x, j) => { x.label = wpName(x.w, j, real.length); });
+    if (opts.wpt) thin(real, MAX).forEach(({ w, label }) => L.push(pt('wpt', w.c, `<name>${U.esc(label)}</name>`)));
     if (opts.rte) {
-      // Points de passage + points de guidage réguliers pour que le GPS suive les mêmes routes
-      const step = Math.max(5000, comb.total / 120);
-      const marks = new Set(comb.starts.map(d => Math.round(d)));
-      for (let d = step; d < comb.total - step / 2; d += step) marks.add(Math.round(d));
-      const ds = [...marks].sort((a, b) => a - b);
+      // Étapes + points de guidage réguliers pour que le GPS suive les mêmes routes, 99 points au plus
+      const keep = thin(real, MAX).map(({ i, label }) => ({ d: Math.round(comb.starts[i] ?? (i === n - 1 ? comb.total : 0)), i, label }));
+      const G = Math.max(0, Math.min(Math.floor(comb.total / 5000), MAX - keep.length));
+      const ds = keep.slice();
+      for (let k = 1; k <= G; k++) {
+        const d = Math.round(comb.total * k / (G + 1));
+        if (!keep.some(x => Math.abs(x.d - d) < 1000)) ds.push({ d, i: -1 });
+      }
+      ds.sort((a, b) => a.d - b.d);
       L.push(`<rte><name>${name}</name>`);
-      ds.forEach((d, k) => {
-        const c = U.at(comb.coords, comb.cum, d);
+      let g = 0;
+      ds.forEach(({ d, i, label }) => {
+        const c = i >= 0 ? state.waypoints[i].c : U.at(comb.coords, comb.cum, d);
         if (!c) return;
-        const wi = comb.starts.findIndex(x => Math.round(x) === d);
-        const nm = wi >= 0 && state.waypoints[wi] ? wpName(state.waypoints[wi], wi, n) : 'Guidage ' + k;
-        L.push(pt('rtept', c, `<name>${U.esc(nm)}</name>`));
+        L.push(pt('rtept', c, `<name>${U.esc(i >= 0 ? label : 'Guidage ' + (++g))}</name>`));
       });
       L.push('</rte>');
     }
