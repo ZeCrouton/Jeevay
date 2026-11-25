@@ -17,8 +17,14 @@
     if (Date.now() - lockToast > 1500) { lockToast = Date.now(); UI.toast('Tracé verrouillé : touche le cadenas pour le modifier', 'info', 2200); }
     return true;
   }
+  // Refuse un point posé dans la mer ou un plan d'eau
+  function inWater(c) {
+    if (!M.isWater(c)) return false;
+    UI.toast('Point dans l’eau : choisissez un endroit sur la terre ferme', 'error', 2500);
+    return true;
+  }
   function addPoint(c) {
-    if (guard()) return;
+    if (guard() || inWater(c)) return;
     UI.closeChooser();
     const snap = T.settings.get().snapMain && st().mode !== 'run';
     let id;
@@ -44,6 +50,7 @@
 
   function movePoint(id, c) {
     if (guard()) return;
+    if (inWater(c)) { render(); return; }
     S.commit(s => { s.waypoints = s.waypoints.map(w => w.id === id ? { ...w, c, name: null } : w); });
     nameLater(id);
   }

@@ -92,6 +92,10 @@ T.map = (() => {
     map.addLayer({ id: 'tj-pending', type: 'line', source: 'tj-legs', filter: ['==', ['get', 'pending'], true],
       paint: { 'line-color': ['case', ['==', ['get', 'error'], true], '#e03131', '#14161b'], 'line-width': 3, 'line-opacity': 0.75, 'line-dasharray': [1, 1.8] } });
     map.addLayer({ id: 'tj-hit', type: 'line', source: 'tj-legs', paint: { 'line-color': '#000', 'line-opacity': 0, 'line-width': 22 } });
+    // Données invisibles (eau et routes) pour refuser les points posés dans la mer ou un plan d'eau, quel que soit le fond de carte
+    if (!map.getSource('tj-ovt')) map.addSource('tj-ovt', { type: 'vector', url: 'https://tiles.openfreemap.org/planet' });
+    map.addLayer({ id: 'tj-water', type: 'fill', source: 'tj-ovt', 'source-layer': 'water', paint: { 'fill-opacity': 0 } });
+    map.addLayer({ id: 'tj-roads', type: 'line', source: 'tj-ovt', 'source-layer': 'transportation', filter: ['!=', ['get', 'class'], 'ferry'], paint: { 'line-opacity': 0, 'line-width': 1 } });
     const CATS = T.providers.poi.CATS;
     Object.keys(CATS).forEach(k => { const id = 'tj-poi-' + k; if (!map.hasImage(id)) map.addImage(id, poiIcon(CATS[k].color, GLYPH[k]), { pixelRatio: 2 }); });
     map.addLayer({ id: 'tj-poi', type: 'symbol', source: 'tj-poi',
@@ -126,6 +130,16 @@ T.map = (() => {
       if (lg) return h.legClick(lg.properties.leg, c);
     }
     h.mapClick(c);
+  }
+
+  // Vrai si le point tombe dans la mer, un lac ou un grand fleuve (sauf pont, digue ou route à cet endroit)
+  function isWater(c) {
+    if (!ready || !map.getLayer('tj-water')) return false;
+    try {
+      const p = map.project(c);
+      if (!map.queryRenderedFeatures([[p.x - 1, p.y - 1], [p.x + 1, p.y + 1]], { layers: ['tj-water'] }).length) return false;
+      return !map.queryRenderedFeatures(box(p, 9), { layers: ['tj-roads'] }).length;
+    } catch (e) { return false; }
   }
 
   function setPois(features) { last.poi = { type: 'FeatureCollection', features }; flush(); }
@@ -213,5 +227,5 @@ T.map = (() => {
   }
   const center = () => { const c = map.getCenter(); return [c.lng, c.lat]; };
 
-  return { init, setPois, snapshot, setLegs, setAlerts, setHover, syncMarkers, openPopup, closePopup, fit, flyTo, setStyle, center, get raw() { return map; } };
+  return { init, isWater, setPois, snapshot, setLegs, setAlerts, setHover, syncMarkers, openPopup, closePopup, fit, flyTo, setStyle, center, get raw() { return map; } };
 })();
