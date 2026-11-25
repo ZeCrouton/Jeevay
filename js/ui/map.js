@@ -13,7 +13,7 @@ T.map = (() => {
     const st = T.settings.get();
     const style = T.config.map.styles.find(s => s.id === st.mapStyle) || T.config.map.styles[0];
     map = new maplibregl.Map({
-      container: el, style: style.url, center: T.config.map.center, zoom: T.config.map.zoom,
+      container: el, style: style.style || style.url, center: T.config.map.center, zoom: T.config.map.zoom,
       attributionControl: false, dragRotate: false, pitchWithRotate: false
     });
     map.touchZoomRotate.disableRotation();
@@ -52,6 +52,32 @@ T.map = (() => {
     return g.getImageData(0, 0, S, S);
   }
 
+  // Pictos des lieux (tracés en trait blanc sur pastille colorée)
+  const GLYPH = {
+    food: ['M7 3v7a2 2 0 0 0 2 2v9M11 3v7a2 2 0 0 1-2 2M9 3v6M17 21V3c-2 1-3.5 4-3.5 8h3.5'],
+    fuel: ['M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M4 21h12M7 7h6v4H7zM15 9h2a2 2 0 0 1 2 2v5a1.5 1.5 0 0 0 3 0V9l-3-3'],
+    view: ['M4 8h3l1.5-2.5h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z', 'M12 17a3.6 3.6 0 1 0 0-7.2 3.6 3.6 0 0 0 0 7.2Z'],
+    sleep: ['M3 11.5 12 4l9 7.5M5.5 10v10h13V10M10 20v-5.5h4V20'],
+    pass: ['M3 19 9.5 8l3.5 6 2-3L21 19H3Z'],
+    water: ['M12 3.5s6 6.3 6 10.5a6 6 0 0 1-12 0c0-4.200 6-10.500 6-10.500Z'],
+    bike: ['M14.500 6.500a4.500 4.500 0 0 1-6 6L4 17l3 3 4.500-4.500a4.500 4.500 0 0 0 6-6l-3 3-2-2 3-3Z'],
+    wc: ['M8 4a2 2 0 1 0 0 .01M5 21v-8l-1-3h8l-1 3v8M17 4a2 2 0 1 0 0 .01M14.500 21v-6h-1.500l1.800-5h4.400l1.800 5H19.500v6']
+  };
+  function poiIcon(color, paths) {
+    const S = 44, c = document.createElement('canvas');
+    c.width = c.height = S;
+    const g = c.getContext('2d');
+    g.shadowColor = 'rgba(0,0,0,.35)'; g.shadowBlur = 4; g.shadowOffsetY = 1;
+    g.beginPath(); g.arc(S / 2, S / 2, 18, 0, 7); g.fillStyle = color; g.fill();
+    g.shadowColor = 'transparent';
+    g.lineWidth = 3; g.strokeStyle = '#fff'; g.stroke();
+    g.save(); g.translate(S / 2 - 12 * 0.95, S / 2 - 12 * 0.95); g.scale(0.95, 0.95);
+    g.strokeStyle = '#fff'; g.fillStyle = '#fff'; g.lineWidth = 2.2; g.lineCap = g.lineJoin = 'round';
+    (paths || []).forEach(d => g.stroke(new Path2D(d)));
+    g.restore();
+    return g.getImageData(0, 0, S, S);
+  }
+
   function addLayers() {
     if (map.getSource('tj-legs')) return;
     map.addSource('tj-legs', { type: 'geojson', data: empty() });
@@ -66,8 +92,11 @@ T.map = (() => {
     map.addLayer({ id: 'tj-pending', type: 'line', source: 'tj-legs', filter: ['==', ['get', 'pending'], true],
       paint: { 'line-color': ['case', ['==', ['get', 'error'], true], '#e03131', '#14161b'], 'line-width': 3, 'line-opacity': 0.75, 'line-dasharray': [1, 1.8] } });
     map.addLayer({ id: 'tj-hit', type: 'line', source: 'tj-legs', paint: { 'line-color': '#000', 'line-opacity': 0, 'line-width': 22 } });
-    map.addLayer({ id: 'tj-poi', type: 'circle', source: 'tj-poi',
-      paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 4, 13, 7], 'circle-color': ['get', 'color'], 'circle-stroke-color': '#fff', 'circle-stroke-width': 2 } });
+    const CATS = T.providers.poi.CATS;
+    Object.keys(CATS).forEach(k => { const id = 'tj-poi-' + k; if (!map.hasImage(id)) map.addImage(id, poiIcon(CATS[k].color, GLYPH[k]), { pixelRatio: 2 }); });
+    map.addLayer({ id: 'tj-poi', type: 'symbol', source: 'tj-poi',
+      layout: { 'icon-image': ['concat', 'tj-poi-', ['get', 'cat']], 'icon-allow-overlap': true, 'icon-ignore-placement': true,
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 7, 0.62, 13, 0.95] } });
     // Points d'attention : triangles « ! » (rouge = alerte, ambre = information), pour ne pas les confondre avec les lieux (ronds colorés)
     for (const [id, fill, ink] of [['tj-warn', '#d92d20', '#fff'], ['tj-info', '#f5a300', '#14161b']]) if (!map.hasImage(id)) map.addImage(id, alertIcon(fill, ink), { pixelRatio: 2 });
     map.addLayer({ id: 'tj-alerts', type: 'symbol', source: 'tj-alerts',
@@ -146,7 +175,8 @@ T.map = (() => {
       const gap = w.gap && kind === 'mid';
       if (kind === 'mid' && !gap) num++;
       el.className = `wp wp-${kind}${w.locked ? ' wp-locked' : ''}${gap ? ' wp-gap' : ''}${w.night && kind === 'mid' ? ' wp-night' : ''}`;
-      el.textContent = i === 0 ? 'D' : i === n - 1 ? 'A' : gap ? '' : String(num);
+      if (w.night && kind === 'mid') el.innerHTML = '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M13 9a7.500 7.500 0 1 0 9 10.500A8.500 8.500 0 0 1 13 9Z" fill="#fff"/><text x="19" y="15" font-size="12" font-weight="800" fill="#ffd43b" font-family="system-ui,sans-serif">z</text><text x="24.5" y="9" font-size="8.5" font-weight="800" fill="#ffd43b" font-family="system-ui,sans-serif">z</text></svg>';
+      else el.textContent = i === 0 ? 'D' : i === n - 1 ? 'A' : gap ? '' : String(num);
       el.title = gap ? 'Coupure du signal GPS, comblée par la route' : (w.night && kind === 'mid' ? 'Nuit — ' : '') + (w.name ? w.name + ' — ' : '') + (w.locked ? 'extrémité d’un tracé importé' : 'glisser pour déplacer');
       m.setDraggable(!w.locked && !(h.isLocked && h.isLocked()));
       const p = m.getLngLat();
@@ -178,7 +208,7 @@ T.map = (() => {
     const s = T.config.map.styles.find(x => x.id === id);
     if (!s) return;
     ready = false;
-    map.setStyle(s.url, { diff: false });
+    map.setStyle(s.style || s.url, { diff: false });
   }
   const center = () => { const c = map.getCenter(); return [c.lng, c.lat]; };
 

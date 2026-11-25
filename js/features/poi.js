@@ -154,7 +154,7 @@
       ${!data.loading && !data.error && P.cached(data.key, [...on]) && !list.length ? `<p class="muted small">${P.covered(data.key) ? 'Aucun lieu de ces catégories près du parcours.' : 'Lieux disponibles en France uniquement pour le moment.'}</p>` : ''}
       ${rows.length ? `<ul class="pois">${rows.map(it => `<li><button data-act="poiGo" data-id="${it.id}"><i class="dot" style="background:${P.CATS[it.cat].color}"></i><span class="pn">${U.esc(it.name)}</span><span class="pk">${it.night != null ? `nuit ${it.night + 1}` : `km ${U.nf(it.d / 1000, 1)}`}</span></button></li>`).join('')}</ul>` : ''}
       ${list.length > rows.length ? `<button class="mini" data-act="poiMore">Voir les ${list.length} lieux</button>` : ''}`;
-    T.map.setPois(list.map(it => ({ type: 'Feature', geometry: { type: 'Point', coordinates: it.c }, properties: { id: it.id, color: P.CATS[it.cat].color } })));
+    T.map.setPois(list.map(it => ({ type: 'Feature', geometry: { type: 'Point', coordinates: it.c }, properties: { id: it.id, cat: it.cat, color: P.CATS[it.cat].color } })));
   });
 
   Object.assign(T.hooks.act, {

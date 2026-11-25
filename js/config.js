@@ -5,14 +5,21 @@ window.T = window.T || {};
 
 T.config = {
   appName: 'Jeevay',
-  version: '1.11.0',
+  version: '1.12.0',
   storagePrefix: 'trajecto.',
 
   map: {
     styles: [
       { id: 'liberty', label: 'Couleurs', url: 'https://tiles.openfreemap.org/styles/liberty' },
       { id: 'bright', label: 'Routier', url: 'https://tiles.openfreemap.org/styles/bright' },
-      { id: 'positron', label: 'Épuré', url: 'https://tiles.openfreemap.org/styles/positron' }
+      { id: 'positron', label: 'Épuré', url: 'https://tiles.openfreemap.org/styles/positron' },
+      { id: 'sat', label: 'Satellite (France)', style: {
+        version: 8,
+        sources: { sat: { type: 'raster', tileSize: 256, maxzoom: 19,
+          tiles: ['https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}'],
+          attribution: 'Photos aériennes © <a href="https://geoservices.ign.fr" target="_blank">IGN</a> (Géoplateforme, Licence ouverte)' } },
+        layers: [{ id: 'sat', type: 'raster', source: 'sat' }]
+      } }
     ],
     center: [5.93, 43.13],
     zoom: 9
