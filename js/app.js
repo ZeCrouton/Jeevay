@@ -140,7 +140,7 @@
         const last = s.waypoints[s.waypoints.length - 1];
         let a;
         if (!last) { a = { id: U.uid(), c: start, locked: true }; s.waypoints.push(a); }
-        else if (U.dist(last.c, start) < 30) {
+        else if (U.dist(last.c, start) < 150) {   // extrémités quasi jointes : pas de liaison à calculer
           a = last;
           if (!last.locked) { last.c = start; last.locked = true; }
         } else {
@@ -356,14 +356,68 @@
     if (items.length) importDialog(items);
   }
 
+  // Ordre automatique des tracés importés : enchaîne les extrémités les plus proches
+  // (chemin le plus court entre fin d'un tracé et début du suivant, calcul exact jusqu'à 12 tracés).
+  function autoOrder(items) {
+    const on = items.filter(i => !i.off), off = items.filter(i => i.off);
+    const n = on.length;
+    if (n < 2) return { items: on.concat(off), changed: false };
+    const ends = on.map(i => i.reversed ? [i.coords[i.coords.length - 1], i.coords[0]] : [i.coords[0], i.coords[i.coords.length - 1]]);
+    // Noms de fichiers « départ-arrivée » (Liberty Rider…) : si l'arrivée de l'un est le départ de l'autre, liaison favorisée
+    const nm = on.map(i => (i.file || '').toLowerCase().replace(/\.[^.]+$/, '').replace(/[-_ ]\d+$/, '').split(/[-_ ]+/));
+    const chain = (a, b) => {
+      const x = nm[a], y = nm[b];
+      for (let k = 1; k < x.length; k++) {
+        const t = x.slice(k);
+        if (t.join('').length >= 4 && t.length < y.length && t.every((w, q) => w === y[q])) return true;
+      }
+      return false;
+    };
+    const G = on.map((_, a) => on.map((_, b) => U.dist(ends[a][1], ends[b][0]) * (chain(a, b) ? 0.25 : 1)));
+    const g = (a, b) => G[a][b];
+    let order;
+    if (n <= 12) {
+      const N = 1 << n, cost = new Float64Array(N * n).fill(Infinity), prev = new Int8Array(N * n).fill(-1);
+      for (let i = 0; i < n; i++) cost[(1 << i) * n + i] = 0;
+      for (let m = 1; m < N; m++) for (let i = 0; i < n; i++) {
+        const c = cost[m * n + i];
+        if (c === Infinity) continue;
+        for (let j = 0; j < n; j++) {
+          if (m & (1 << j)) continue;
+          const k = (m | (1 << j)) * n + j, v = c + g(i, j);
+          if (v < cost[k]) { cost[k] = v; prev[k] = i; }
+        }
+      }
+      let best = 0;
+      for (let i = 1; i < n; i++) if (cost[(N - 1) * n + i] < cost[(N - 1) * n + best]) best = i;
+      order = [];
+      for (let m = N - 1, i = best; i >= 0;) { order.unshift(i); const p = prev[m * n + i]; m &= ~(1 << i); i = p; }
+    } else {
+      const left = new Set(on.map((_, k) => k));
+      order = [0]; left.delete(0);
+      while (left.size) {
+        const a = order[order.length - 1];
+        let b = -1;
+        left.forEach(j => { if (b < 0 || g(a, j) < g(a, b)) b = j; });
+        order.push(b); left.delete(b);
+      }
+    }
+    return { items: order.map(k => on[k]).concat(off), changed: order.some((k, i) => k !== i) };
+  }
+
   function importDialog(items) {
+    const ord = autoOrder(items);
+    items = ord.items;
+    const dups = items.filter(i => i.dup).length;
     const hasRoute = st().waypoints.length > 0;
     const body = document.createElement('div');
     const draw = () => {
       body.innerHTML = `<p class="muted">Cochez les tracés à garder et réglez leur ordre : ils seront mis bout à bout.</p>
+        ${ord.changed ? '<p class="muted small">Ordre réglé automatiquement : chaque tracé commence là où finit le précédent.</p>' : ''}
+        ${dups ? `<p class="muted small">${dups > 1 ? `${dups} itinéraires prévus ont été décochés` : 'Un itinéraire prévu a été décoché'} : ils doublent les tracés enregistrés du même fichier.</p>` : ''}
         <ul class="imp">${items.map((it, k) => `<li>
           <label class="chk"><input type="checkbox" data-k="${k}" ${it.off ? '' : 'checked'}>
-          <span><b>${U.esc(it.name)}</b><small>${it.type === 'points' ? `${it.coords.length} points de passage (itinéraire recalculé)` : `Tracé fixe · ${U.nf(it.km, 1)} km`} · ${U.esc(it.file)}${it.reversed ? ' · inversé' : ''}</small></span></label>
+          <span><b>${U.esc(it.name)}</b><small>${it.type === 'points' ? `${it.coords.length} points de passage (recalculé)` : `Tracé fixe · ${U.nf(it.km, 1)} km`} · ${U.esc(it.file)}${it.reversed ? ' · inversé' : ''}</small></span></label>
           <span class="imp-b">
             <button class="icon-btn" data-up="${k}" ${k === 0 ? 'disabled' : ''} aria-label="Monter">${I('up')}</button>
             <button class="icon-btn" data-dn="${k}" ${k === items.length - 1 ? 'disabled' : ''} aria-label="Descendre">${I('down')}</button>

@@ -37,12 +37,14 @@ T.io.parse = (() => {
       const c = clean(all(t, 'trkpt').map(ll));
       if (c.length > 1) items.push({ name: childText(t, 'name') || base + (k ? ` (${k + 1})` : ''), type: 'track', coords: c });
     });
+    const hasTrack = items.length > 0;
     all(doc, 'rte').forEach((r, k) => {
       const c = clean(all(r, 'rtept').map(ll));
       if (c.length < 2) return;
       // Peu de points espacés = points de passage à recalculer ; sinon tracé fixe
       const sparse = length(c) / (c.length - 1) > 800;
-      items.push({ name: childText(r, 'name') || base + ' (itinéraire' + (k ? ' ' + (k + 1) : '') + ')', type: sparse ? 'points' : 'track', coords: c });
+      // Fichier avec tracé enregistré + itinéraire prévu (Liberty Rider…) : l'itinéraire est un doublon, décoché par défaut
+      items.push({ name: base + ' (itinéraire prévu' + (k ? ' ' + (k + 1) : '') + ')', type: sparse ? 'points' : 'track', coords: c, off: hasTrack, dup: hasTrack });
     });
     if (!items.length) {
       const w = clean(all(doc, 'wpt').map(ll));
