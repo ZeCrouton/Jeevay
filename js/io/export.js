@@ -57,49 +57,6 @@ T.io.export = (() => {
   }
 
 
-  // ---------- Export par étapes (Liberty Rider…) ----------
-  // Liberty Rider limite un roadbook à 99 points et en recrée environ un tous les 7 km : un long parcours
-  // doit être découpé. On coupe entre les tracés importés (une journée chacun) ou, sinon, tous les ~200 km.
-  function sections(state) {
-    const comb = A.combine(state), st = comb.starts, legs = state.legs;
-    const cuts = [0];
-    let cur = null;
-    legs.forEach((L, i) => {
-      if (L.kind !== 'track' || !L.name) return;
-      if (cur !== null && L.name !== cur && st[i] - cuts[cuts.length - 1] > 20000) cuts.push(st[i]);
-      cur = L.name;
-    });
-    cuts.push(comb.total);
-    const out = [];
-    for (let k = 0; k < cuts.length - 1; k++) {
-      const a = cuts[k], b = cuts[k + 1], n = Math.max(1, Math.round((b - a) / 200000));
-      for (let j = 0; j < n; j++) out.push([a + (b - a) * j / n, a + (b - a) * (j + 1) / n]);
-    }
-    return out.length > 1 || comb.total > 250000 ? out : [[0, comb.total]];
-  }
-
-  function gpxRange(state, d0, d1, title) {
-    const comb = A.combine(state), name = U.esc(title);
-    const c = [U.at(comb.coords, comb.cum, d0)], ds = [d0];
-    comb.coords.forEach((p, k) => { if (comb.cum[k] > d0 && comb.cum[k] < d1) { c.push(p); ds.push(comb.cum[k]); } });
-    c.push(U.at(comb.coords, comb.cum, d1)); ds.push(d1);
-    const len = d1 - d0, G = Math.min(MAX - 2, Math.max(1, Math.round(len / 7000)));
-    const L = [
-      '<?xml version="1.0" encoding="UTF-8"?>',
-      `<gpx version="1.1" creator="${T.config.appName}" xmlns="http://www.topografix.com/GPX/1/1">`,
-      `<metadata><name>${name}</name><time>${new Date().toISOString()}</time></metadata>`,
-      `<rte><name>${name}</name>`
-    ];
-    for (let k = 0; k <= G + 1; k++) {
-      const p = U.at(comb.coords, comb.cum, d0 + len * k / (G + 1));
-      if (p) L.push(pt('rtept', p, `<name>${k === 0 ? 'Départ' : k === G + 1 ? 'Arrivée' : 'WP' + k}</name>`));
-    }
-    L.push('</rte>', `<trk><name>${name}</name><trkseg>`);
-    c.forEach((p, k) => { if (!p) return; const e = A.eleAt(comb, ds[k]); L.push(pt('trkpt', p, e != null ? `<ele>${e.toFixed(1)}</ele>` : '')); });
-    L.push('</trkseg></trk>', '</gpx>');
-    return L.join('\n');
-  }
-
   function download(filename, text, mime) {
     const blob = new Blob([text], { type: mime });
     const a = document.createElement('a');
@@ -126,5 +83,5 @@ T.io.export = (() => {
       '&waypoints=' + encodeURIComponent(via.map(f).join('|')) + '&travelmode=' + mode;
   }
 
-  return { gpx, sections, gpxRange, download, safeName, googleMapsUrl, wpName };
+  return { gpx, download, safeName, googleMapsUrl, wpName };
 })();

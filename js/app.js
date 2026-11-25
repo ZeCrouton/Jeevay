@@ -530,7 +530,6 @@
     if (!A.combine(s).coords.length) { UI.toast('Rien à exporter pour le moment', 'error'); return; }
     if (s.legs.some(l => l.status === 'pending')) UI.toast('Des tronçons sont encore en calcul : ils ne seront pas inclus');
     const gm = T.io.export.googleMapsUrl(s);
-    const nsec = T.io.export.sections(s).length;
     UI.modal({
       title: 'Exporter le parcours',
       body: `<label class="field"><span>Nom du fichier</span><input id="ex-name" value="${U.esc(T.io.export.safeName(s.name))}"></label>
@@ -538,23 +537,14 @@
           <label><input type="radio" name="ex-k" value="trk" checked><span><b>Trace</b><small>Recommandé : GPS moto, Garmin, Zepp, Strava, Liberty Rider…</small></span></label>
           <label><input type="radio" name="ex-k" value="rte"><span><b>Itinéraire</b><small>Pour les GPS qui recalculent (TomTom…), avec points de guidage</small></span></label>
           <label><input type="radio" name="ex-k" value="both"><span><b>Les deux</b></span></label>
-          <label><input type="radio" name="ex-k" value="lr"><span><b>Liberty Rider</b><small>${nsec > 1 ? `${nsec} fichiers, un par étape (Liberty Rider limite un roadbook à 99 points, soit ~250 km)` : 'Itinéraire + trace au format attendu par Liberty Rider'}</small></span></label>
+          <label><input type="radio" name="ex-k" value="lr"><span><b>Liberty Rider</b><small>Un seul fichier, 99 points au plus (limite de Liberty Rider) : il recalcule la route entre eux</small></span></label>
         </fieldset>
         <label class="chk"><input type="checkbox" id="ex-wpt" checked> Inclure les étapes comme points d’intérêt</label>
         ${gm ? `<p class="muted small">Autre option : <a href="${gm}" target="_blank" rel="noopener">ouvrir dans Google Maps</a> (approximatif, Google recalcule à sa façon).</p>` : ''}`,
       actions: [{ label: 'Annuler' }, {
         label: 'Télécharger le GPX', primary: true, onClick: root => {
           const k = root.querySelector('input[name="ex-k"]:checked').value;
-          if (k === 'lr') {
-            const base = T.io.export.safeName($('#ex-name', root).value) || 'parcours', secs = T.io.export.sections(st());
-            secs.forEach(([a, b], j) => setTimeout(() => {
-              const t = secs.length > 1 ? `${st().name || 'Parcours'} ${j + 1}-${secs.length}` : (st().name || 'Parcours');
-              T.io.export.download(base + (secs.length > 1 ? `-${j + 1}` : '') + '.gpx', T.io.export.gpxRange(st(), a, b, t), 'application/gpx+xml');
-            }, j * 700));
-            UI.toast(secs.length > 1 ? `${secs.length} fichiers GPX téléchargés : importez-les un par un dans Liberty Rider` : 'GPX téléchargé', 'info', 6000);
-            return;
-          }
-          const txt = T.io.export.gpx(st(), { trk: k !== 'rte', rte: k !== 'trk', wpt: $('#ex-wpt', root).checked });
+          const txt = T.io.export.gpx(st(), k === 'lr' ? { rte: true } : { trk: k !== 'rte', rte: k !== 'trk', wpt: $('#ex-wpt', root).checked });
           const fn = (T.io.export.safeName($('#ex-name', root).value) || 'parcours') + '.gpx';
           T.io.export.download(fn, txt, 'application/gpx+xml');
           UI.toast('GPX téléchargé : ' + fn);
