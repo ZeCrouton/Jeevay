@@ -406,12 +406,12 @@
   }
 
   function importDialog(items) {
-    const ord = autoOrder(items);
+    let ord = autoOrder(items);
     items = ord.items;
-    const dups = items.filter(i => i.dup).length;
     const hasRoute = st().waypoints.length > 0;
     const body = document.createElement('div');
     const draw = () => {
+      const dups = items.filter(i => i.dup).length;
       body.innerHTML = `<p class="muted">Cochez les tracés à garder et réglez leur ordre : ils seront mis bout à bout.</p>
         ${ord.changed ? '<p class="muted small">Ordre réglé automatiquement : chaque tracé commence là où finit le précédent.</p>' : ''}
         ${dups ? `<p class="muted small">${dups > 1 ? `${dups} itinéraires prévus ont été décochés` : 'Un itinéraire prévu a été décoché'} : ils doublent les tracés enregistrés du même fichier.</p>` : ''}
@@ -423,6 +423,7 @@
             <button class="icon-btn" data-dn="${k}" ${k === items.length - 1 ? 'disabled' : ''} aria-label="Descendre">${I('down')}</button>
             <button class="icon-btn" data-rv="${k}" aria-label="Inverser le sens">${I('swap')}</button>
           </span></li>`).join('')}</ul>
+        <button class="btn btn-sm" data-more="1">${I('plus')}Ajouter un autre fichier</button>
         <label class="chk"><input type="checkbox" id="imp-connect" ${T.settings.get().autoConnect ? 'checked' : ''}> Relier les tracés entre eux par la route (sinon en ligne droite)</label>
         ${hasRoute ? '<label class="chk"><input type="checkbox" id="imp-replace"> Remplacer le parcours actuel (sinon, ajout à la fin)</label>' : ''}`;
     };
@@ -430,6 +431,21 @@
     body.addEventListener('click', e => {
       const b = e.target.closest('button');
       if (!b) return;
+      if (b.dataset.more) {
+        // Certains téléphones n'autorisent qu'un fichier à la fois : on complète la liste sans fermer la fenêtre
+        const inp = document.createElement('input');
+        inp.type = 'file'; inp.multiple = true;
+        inp.onchange = async () => {
+          const seen = new Set(items.map(i => i.file));
+          for (const f of inp.files) {
+            if (seen.has(f.name)) { UI.toast(`${f.name} est déjà dans la liste`); continue; }
+            try { items.push(...await T.io.parse.file(f)); } catch (err) { UI.toast(err.message, 'error', 6000); }
+          }
+          ord = autoOrder(items); items = ord.items; draw();
+        };
+        inp.click();
+        return;
+      }
       const sw = (a, c) => { [items[a], items[c]] = [items[c], items[a]]; draw(); };
       if (b.dataset.up) sw(+b.dataset.up, +b.dataset.up - 1);
       if (b.dataset.dn) sw(+b.dataset.dn, +b.dataset.dn + 1);
@@ -437,7 +453,7 @@
     });
     body.addEventListener('change', e => { if (e.target.dataset.k) items[+e.target.dataset.k].off = !e.target.checked; });
     UI.modal({
-      title: items.length > 1 ? `Importer ${items.length} tracés` : 'Importer un tracé', body, wide: true,
+      title: 'Importer des tracés', body, wide: true,
       actions: [{ label: 'Annuler' }, {
         label: 'Ajouter au parcours', primary: true, onClick: root => {
           const pick = items.filter(i => !i.off);
@@ -533,6 +549,21 @@
     body.addEventListener('click', e => {
       const b = e.target.closest('button');
       if (!b) return;
+      if (b.dataset.more) {
+        // Certains téléphones n'autorisent qu'un fichier à la fois : on complète la liste sans fermer la fenêtre
+        const inp = document.createElement('input');
+        inp.type = 'file'; inp.multiple = true;
+        inp.onchange = async () => {
+          const seen = new Set(items.map(i => i.file));
+          for (const f of inp.files) {
+            if (seen.has(f.name)) { UI.toast(`${f.name} est déjà dans la liste`); continue; }
+            try { items.push(...await T.io.parse.file(f)); } catch (err) { UI.toast(err.message, 'error', 6000); }
+          }
+          ord = autoOrder(items); items = ord.items; draw();
+        };
+        inp.click();
+        return;
+      }
       if (b.hasAttribute('data-save')) {
         const name = $('#lib-name', body).value.trim() || 'Mon parcours';
         S.silent(s => { s.name = name; });
@@ -817,6 +848,21 @@
     list.addEventListener('click', e => {
       const b = e.target.closest('button');
       if (!b) return;
+      if (b.dataset.more) {
+        // Certains téléphones n'autorisent qu'un fichier à la fois : on complète la liste sans fermer la fenêtre
+        const inp = document.createElement('input');
+        inp.type = 'file'; inp.multiple = true;
+        inp.onchange = async () => {
+          const seen = new Set(items.map(i => i.file));
+          for (const f of inp.files) {
+            if (seen.has(f.name)) { UI.toast(`${f.name} est déjà dans la liste`); continue; }
+            try { items.push(...await T.io.parse.file(f)); } catch (err) { UI.toast(err.message, 'error', 6000); }
+          }
+          ord = autoOrder(items); items = ord.items; draw();
+        };
+        inp.click();
+        return;
+      }
       const r = results[+(b.dataset.k ?? b.dataset.add)];
       if (!r) return;
       M.flyTo(r.c, 13);
@@ -853,6 +899,8 @@
     });
     document.querySelectorAll('.modes [data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
     $('#route-name').addEventListener('change', e => S.silent(s => { s.name = e.target.value.trim() || 'Mon parcours'; }));
+    // Android : un filtre par extension (.gpx…) bloque souvent la sélection multiple ; le format est vérifié à l'ouverture
+    if (/Android/i.test(navigator.userAgent)) $('#file-input').removeAttribute('accept');
     $('#file-input').addEventListener('change', e => { handleFiles([...e.target.files]); e.target.value = ''; });
 
     // Glisser-déposer de fichiers

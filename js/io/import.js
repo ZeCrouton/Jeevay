@@ -35,7 +35,8 @@ T.io.parse = (() => {
     const doc = xml(text), items = [];
     all(doc, 'trk').forEach((t, k) => {
       const c = clean(all(t, 'trkpt').map(ll));
-      if (c.length > 1) items.push({ name: childText(t, 'name') || base + (k ? ` (${k + 1})` : ''), type: 'track', coords: c });
+      const n = childText(t, 'name');   // les noms techniques (identifiants) sont remplacés par le nom du fichier
+      if (c.length > 1) items.push({ name: n && !/^(track|route|trace)?\s*[0-9a-f-]{20,}$/i.test(n) ? n : base + (k ? ` (${k + 1})` : ''), type: 'track', coords: c });
     });
     const hasTrack = items.length > 0;
     all(doc, 'rte').forEach((r, k) => {
