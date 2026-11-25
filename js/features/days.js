@@ -48,6 +48,18 @@
     return { up, down };
   }
 
+  // Heure de départ de chaque journée : jour 1 = départ réglé dans « Météo au passage » ;
+  // jours suivants = lendemain à l'heure choisie sur l'étape « Nuit » (sinon même heure que le jour 1)
+  function startOf(s, k, first, prevEnd, nightW) {
+    if (k === 0) return first;
+    const d = new Date(prevEnd.getTime());
+    d.setDate(d.getDate() + 1);
+    const hhmm = (nightW && nightW.dep) || `${first.getHours()}:${first.getMinutes()}`;
+    const [h, m] = hhmm.split(':').map(Number);
+    d.setHours(h || 0, m || 0, 0, 0);
+    return d;
+  }
+
   function days(s, comb) {
     if (!s.legs.length || comb.total <= 0) return [];
     const { cuts, auto } = cutsOf(s, comb);
@@ -67,6 +79,14 @@
       });
       out.push({ i: k, a, b, dist, dur, pause: pausesFor(dur), up, down, from: marks[k], to: marks[k + 1], auto });
     }
+    // Horaires
+    const first = T.weather ? T.weather.departure() : new Date();
+    out.forEach((d, k) => {
+      const nw = k > 0 && d.from.wi >= 0 ? s.waypoints[d.from.wi] : null;
+      d.start = startOf(s, k, first, k ? out[k - 1].end : first, nw);
+      d.end = new Date(d.start.getTime() + (d.dur + d.pause) * 1000);
+      d.nightW = nw;
+    });
     return out;
   }
 
@@ -75,11 +95,52 @@
     return cutsOf(s, comb).cuts.map((c, k) => ({ k, d: c.d, c: c.wi >= 0 ? s.waypoints[c.wi].c : U.at(comb.coords, comb.cum, c.d) })).filter(x => x.c);
   }
 
+  // Heure de passage (Date) à la distance d ; null s'il n'y a qu'une journée
+  // k : journée imposée (utile aux bornes, qui appartiennent à deux journées)
+  function dateAt(s, comb, d, k) {
+    const D = days(s, comb);
+    if (D.length < 2) return null;
+    const day = D[k] || D.find(x => d <= x.b + 1) || D[D.length - 1];
+    let t = 0;
+    s.legs.forEach((L, i) => {
+      const la = comb.starts[i], lb = comb.starts[i + 1], a = Math.max(day.a, la), b = Math.min(d, day.b, lb);
+      if (b > a && lb > la) t += legDur(L, s.mode) * (b - a) / (lb - la);
+    });
+    return new Date(day.start.getTime() + (t + pausesFor(t)) * 1000);
+  }
+
+  // Signature des horaires (pour savoir si la météo est à jour)
+  const schedSig = s => days(s, A.combine(s)).map(d => d.start.getTime()).join(',');
+
   // Durée totale affichée : avec les pauses si l'option est activée
   function totalDuration(s, sum) {
     if (!T.settings.get().pauses) return sum.duration;
     const D = days(s, A.combine(s));
     return D.length ? D.reduce((t, d) => t + d.dur + d.pause, 0) : sum.duration + pausesFor(sum.duration);
+  }
+
+  const W = () => T.weather;
+  const day2 = dt => dt.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  function dayTime(d) {
+    const hm = W().hm;
+    const val = `${String(d.start.getHours()).padStart(2, '0')}:${String(d.start.getMinutes()).padStart(2, '0')}`;
+    const startTxt = d.i > 0 && d.nightW
+      ? `départ <input type="time" class="time-in" data-dep="${d.nightW.id}" value="${val}" aria-label="Heure de départ du jour ${d.i + 1}">`
+      : `départ ${hm(d.start)}`;
+    return `<span>${day2(d.start)}</span><span>${startTxt}</span><span>arrivée ${hm(d.end)}</span>`;
+  }
+  // Résumé météo du jour, à partir des prévisions déjà chargées (« Météo au passage »)
+  function dayWx(d) {
+    const wx = W() && W().data;
+    if (!wx || !W().fresh(T.app.st())) return '';
+    const rows = wx.rows.filter(r => r.w && (r.k != null ? r.k === d.i : r.d >= d.a - 1 && r.d <= d.b + 1));
+    if (!rows.length) return '';
+    const temps = rows.map(r => r.w.temp).filter(x => x != null);
+    const rain = Math.max(...rows.map(r => r.w.rainProb || 0)), gust = Math.max(...rows.map(r => r.w.gust || 0));
+    const worst = rows.reduce((a, r) => ((r.w.code || 0) > (a.w.code || 0) ? r : a), rows[0]);
+    const [k, lbl] = T.providers.weather.kind(worst.w.code);
+    return `<div class="day-wx" title="${U.esc(lbl)}">${W().icon(k)}<span>${Math.round(Math.min(...temps))}–${Math.round(Math.max(...temps))} °C</span>
+      <span class="${rain >= 50 ? 'hi' : ''}">pluie ${rain} %</span><span>rafales ${Math.round(gust)} km/h</span></div>`;
   }
 
   const label = (s, m) => m.wi >= 0 ? T.io.export.wpName(s.waypoints[m.wi], m.wi, s.waypoints.length) : `km ${U.nf(m.d / 1000)}`;
@@ -94,9 +155,18 @@
       const n = d.i < D.length - 1 ? sleepNear(d.i) : 0;
       return `<li class="day">
         <button class="day-h" data-act="dayFocus" data-i="${d.i}"><b>Jour ${d.i + 1}</b><span>${U.esc(label(s, d.from))}<i>→</i>${U.esc(label(s, d.to))}</span></button>
+        <div class="day-time">${dayTime(d)}</div>
+        ${dayWx(d)}
         <div class="day-figs"><span>${U.fmtKm(d.dist)}</span><span>${U.fmtDur(d.dur + d.pause)}${d.pause ? ` <small>dont ${U.fmtDur(d.pause)} de pause</small>` : ''}</span><span>+${U.nf(d.up)} m</span></div>
         <div class="day-a">${d.i < D.length - 1 ? `<button class="mini" data-act="daySleep" data-i="${d.i}">${I('bed', 'sm')}Dormir ici${n ? ` <b>${n}</b>` : ''}</button>` : ''}<button class="mini" data-act="dayGpx" data-i="${d.i}">${I('upload', 'sm')}GPX du jour</button></div></li>`;
     }).join('')}</ol>${D[0].auto ? '<p class="muted small">Découpage proposé automatiquement (réglage). Marquez une étape « Nuit » pour choisir vous-même où dormir.</p>' : ''}`;
+  });
+
+  // Heure de départ d'une journée (sur l'étape « Nuit » de la veille)
+  document.addEventListener('change', e => {
+    const id = e.target && e.target.dataset && e.target.dataset.dep;
+    if (!id || !/^\d{1,2}:\d{2}$/.test(e.target.value)) return;
+    T.app.S.commit(x => { x.waypoints = x.waypoints.map(p => p.id === id ? { ...p, dep: e.target.value } : p); }, true);
   });
 
   Object.assign(T.hooks.act, {
@@ -121,5 +191,5 @@
     }
   });
 
-  T.days = { days: s => days(s, A.combine(s)), nights: s => nights(s, A.combine(s)), totalDuration, pausesFor, dayKm, DEF_KM };
+  T.days = { days: s => days(s, A.combine(s)), nights: s => nights(s, A.combine(s)), dateAt: (s, d, k) => dateAt(s, A.combine(s), d, k), schedSig, totalDuration, pausesFor, dayKm, DEF_KM };
 })();

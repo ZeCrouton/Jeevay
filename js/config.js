@@ -5,7 +5,7 @@ window.T = window.T || {};
 
 T.config = {
   appName: 'Jeevay',
-  version: '1.9.0',
+  version: '1.10.0',
   storagePrefix: 'trajecto.',
 
   map: {

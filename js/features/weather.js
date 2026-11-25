@@ -26,7 +26,9 @@
     return t;
   }
 
-  const sigOf = (s, dep) => s.legs.map(l => l.id + ':' + l.rev + ':' + l.status).join('|') + '@' + dep.getTime();
+  const sigOf = (s, dep) => s.legs.map(l => l.id + ':' + l.rev + ':' + l.status).join('|') + '@' + dep.getTime() + (T.days ? '#' + T.days.schedSig(s) : '');
+  // Heure de passage : par journée si le parcours est découpé (nuits, pauses), sinon en continu
+  const when = (s, comb, sum, dep, d, k) => (T.days && T.days.dateAt(s, d, k)) || new Date(dep.getTime() + timeAt(s, comb, sum, d) * 1000);
 
   async function load() {
     const s = T.app.st(), comb = T.analysis.combine(s), sum = T.analysis.summary(s);
@@ -40,12 +42,18 @@
     ctrl = new AbortController();
     data = { ...data, loading: true, error: null };
     T.app.render();
-    const n = U.clamp(Math.round(comb.total / 30000), 1, 7); // peu de points : le quota gratuit est compté par point
-    const pts = [];
-    for (let k = 0; k <= n; k++) {
-      const d = comb.total * k / n;
-      pts.push({ d, c: U.at(comb.coords, comb.cum, d), t: new Date(dep.getTime() + timeAt(s, comb, sum, d) * 1000) });
+    // Peu de points : le quota gratuit est compté par point. Sur plusieurs jours, des points pour chaque journée.
+    const D = T.days ? T.days.days(s) : [], ds = [];
+    if (D.length > 1) {
+      const per = U.clamp(Math.floor(18 / D.length), 1, 4);
+      D.forEach(day => { for (let j = 0; j <= per; j++) ds.push({ d: day.a + (day.b - day.a) * j / per, k: day.i }); });
+    } else {
+      const n = U.clamp(Math.round(comb.total / 30000), 1, 7);
+      for (let j = 0; j <= n; j++) ds.push({ d: comb.total * j / n, k: null });
     }
+    const pts = ds.map(({ d, k }) => ({ d, k, c: U.at(comb.coords, comb.cum, d), t: when(s, comb, sum, dep, d, k) }));
+    const lastT = Math.max(...pts.map(p => p.t.getTime()));
+    if (lastT > Date.now() + T.config.weather.days * 86400e3) T.ui.toast(`Prévisions disponibles à ${T.config.weather.days} jours : les derniers jours resteront sans météo`);
     try {
       const res = await W.at(pts, ctrl.signal);
       data = { sig: sigOf(s, dep), rows: pts.map((p, i) => ({ ...p, w: res[i] })), loading: false, error: null };
@@ -81,14 +89,19 @@
       if (w.temp != null && w.temp >= 32 && (!hot || w.temp > hot.w.temp)) hot = r;
     });
     const km = r => U.nf(r.d / 1000);
-    if (rain) sum.alerts.push({ lvl: 'warn', d: rain.d, text: `Pluie probable vers ${hm(rain.t)} (km ${km(rain)}, ${rain.w.rainProb} %)` });
-    if (gust) sum.alerts.push({ lvl: 'warn', d: gust.d, text: `Rafales jusqu’à ${Math.round(gust.w.gust)} km/h vers ${hm(gust.t)} (km ${km(gust)})` });
-    if (cold) sum.alerts.push({ lvl: 'warn', d: cold.d, text: `${Math.round(cold.w.temp)} °C vers ${hm(cold.t)} (km ${km(cold)}) : risque de verglas` });
-    if (hot) sum.alerts.push({ lvl: 'info', d: hot.d, text: `Forte chaleur : ${Math.round(hot.w.temp)} °C vers ${hm(hot.t)}, prévoyez de l’eau` });
-    const last = data.rows[data.rows.length - 1];
-    if (last && last.w && last.w.sunset && last.t > last.w.sunset) {
-      sum.alerts.push({ lvl: 'info', d: last.d, text: `Arrivée vers ${hm(last.t)}, après le coucher du soleil (${hm(last.w.sunset)})` });
-    }
+    const multi = T.days && T.days.days(s).length > 1, at = r => (multi && r.k != null ? `jour ${r.k + 1}, ` : '') + hm(r.t);
+    if (rain) sum.alerts.push({ lvl: 'warn', d: rain.d, text: `Pluie probable ${multi ? '' : 'vers '}${at(rain)} (km ${km(rain)}, ${rain.w.rainProb} %)` });
+    if (gust) sum.alerts.push({ lvl: 'warn', d: gust.d, text: `Rafales jusqu’à ${Math.round(gust.w.gust)} km/h ${multi ? '' : 'vers '}${at(gust)} (km ${km(gust)})` });
+    if (cold) sum.alerts.push({ lvl: 'warn', d: cold.d, text: `${Math.round(cold.w.temp)} °C ${multi ? '' : 'vers '}${at(cold)} (km ${km(cold)}) : risque de verglas` });
+    if (hot) sum.alerts.push({ lvl: 'info', d: hot.d, text: `Forte chaleur : ${Math.round(hot.w.temp)} °C ${multi ? '' : 'vers '}${at(hot)}, prévoyez de l’eau` });
+    // Arrivée après le coucher du soleil : vérifiée pour chaque journée
+    const D = T.days ? T.days.days(s) : [];
+    const ends = D.length > 1 ? D.map(day => ({ day, r: data.rows.filter(r => r.k === day.i).pop() })) : [{ day: null, r: data.rows[data.rows.length - 1] }];
+    ends.forEach(({ day, r }) => {
+      if (r && r.w && r.w.sunset && r.t > r.w.sunset) {
+        sum.alerts.push({ lvl: 'info', d: r.d, text: `${day ? `Jour ${day.i + 1} : arrivée` : 'Arrivée'} vers ${hm(r.t)}, après le coucher du soleil (${hm(r.w.sunset)})` });
+      }
+    });
   });
 
   T.hooks.render.push((s, sum, comb) => {
@@ -96,17 +109,19 @@
     if (!el || (document.activeElement && document.activeElement.id === 'wx-dep')) return;
     if (comb.coords.length < 2) { el.innerHTML = ''; return; }
     const dep = departure(), stale = data.sig && data.sig !== sigOf(s, dep);
-    const end = new Date(dep.getTime() + sum.duration * 1000);
+    const D = T.days ? T.days.days(s) : [];
+    const end = D.length > 1 ? D[D.length - 1].end : new Date(dep.getTime() + (T.days ? T.days.totalDuration(s, sum) : sum.duration) * 1000);
     const btn = data.loading ? '<span class="calc"><i class="spin"></i>Prévision…</span>'
       : `<button class="mini" data-act="wxLoad">${T.icons('retry')}${data.sig ? (stale ? 'Mettre à jour' : 'Actualiser') : 'Voir la météo'}</button>`;
     el.innerHTML = `<div class="sec-h"><h3>Météo au passage</h3>${btn}</div>
-      <div class="dep"><label>Départ <input type="datetime-local" id="wx-dep" value="${toInput(dep)}"></label>
+      <div class="dep"><label>${D.length > 1 ? 'Départ du jour 1' : 'Départ'} <input type="datetime-local" id="wx-dep" value="${toInput(dep)}"></label>
         <span class="muted small">Arrivée estimée ${end.toLocaleDateString('fr-FR', { weekday: 'short' })} ${hm(end)}</span></div>
       ${data.error ? `<p class="err">${U.esc(data.error)}</p>` : ''}
       ${data.sig && !stale ? `<div class="wx">${data.rows.map(r => {
         if (!r.w) return `<div class="wx-c"><b>${hm(r.t)}</b><small>km ${U.nf(r.d / 1000)}</small><span class="muted small">—</span></div>`;
         const [k, lbl] = W.kind(r.w.code);
-        return `<div class="wx-c" title="${lbl}"><b>${hm(r.t)}</b><small>km ${U.nf(r.d / 1000)}</small>${icon(k)}
+        const dl = D.length > 1 && r.k != null ? `J${r.k + 1} ` : '';
+        return `<div class="wx-c" title="${lbl}"><b>${dl}${hm(r.t)}</b><small>km ${U.nf(r.d / 1000)}</small>${icon(k)}
           <span class="wx-t">${Math.round(r.w.temp)}°</span>
           <span class="wx-r${r.w.rainProb >= 50 ? ' hi' : ''}">${r.w.rainProb ?? 0} %</span>
           <span class="wx-w">${Math.round(r.w.wind)}<small>/${Math.round(r.w.gust)} km/h</small></span></div>`;
@@ -116,5 +131,6 @@
   });
 
   T.hooks.act.wxLoad = load;
-  T.weather = { departure, timeAt, hm, get data() { return data; } };
+  const fresh = s => !!data.sig && data.sig === sigOf(s, departure());
+  T.weather = { departure, timeAt, hm, icon, fresh, get data() { return data; } };
 })();

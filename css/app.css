@@ -463,3 +463,9 @@ textarea { resize: vertical; font-family: var(--num); }
 .day-a .mini b { font: 700 12px var(--num); }
 .num-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: -2px 0 8px 30px; font-size: 14px; color: var(--muted); }
 .radios .num-in, .num-in { width: 4.6em; height: auto; flex: none; padding: 3px 6px; margin: 0 2px; font: inherit; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: inherit; }
+.day-time { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: 14px; color: var(--muted); }
+.day-time span:first-child { color: var(--ink); font-weight: 600; text-transform: capitalize; }
+.time-in { font: inherit; padding: 1px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); }
+.day-wx { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: 14px; }
+.day-wx .wx-ic { width: 22px; height: 22px; }
+.day-wx .hi { color: #1c7ed6; font-weight: 600; }
