@@ -88,7 +88,7 @@ T.engine = (() => {
           if (m) {
             edges = m.edges;
             // Recalage sur les routes : accepté seulement s'il reste fidèle au fichier (sinon tracé d'origine)
-            if (L.snap && m.coords && (m.checked || T.providers.routing.snapOk(coords, m.coords))) {
+            if (L.snap && m.ok && m.coords) {
               const s = m.coords.slice();
               s[0] = coords[0]; s[s.length - 1] = coords[coords.length - 1];
               coords = s;
