@@ -3,6 +3,10 @@
   const U = T.util, I = T.icons, S = T.store, E = T.engine, A = T.analysis, M = T.map, UI = T.ui, $ = UI.$;
   const st = () => S.state;
   // Couleur de l'appli : choix des réglages, sinon celle de l'activité (moto orange, vélo vert, running magenta)
+  // Texte lisible sur la couleur d'accent : blanc ou encre, selon le meilleur contraste (WCAG)
+  const lum = hex => { const c = [1, 3, 5].map(i => parseInt(hex.substr(i, 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  const onAccent = hex => { const L = lum(hex); return (1.05 / (L + 0.05)) >= ((L + 0.05) / (lum('#14161b') + 0.05)) ? '#fff' : '#14161b'; };
+  const setAccent = c => { const r = document.documentElement.style; r.setProperty('--accent', c); r.setProperty('--on-accent', /^#[0-9a-f]{6}$/i.test(c) ? onAccent(c) : '#fff'); };
   const accent = () => { const c = T.settings.get().accent; return /^#[0-9a-f]{6}$/i.test(c || '') ? c : T.config.modes[st().mode].accent; };
 
   // ---------- Actions sur le parcours ----------
@@ -319,7 +323,7 @@
     const s = st(), sum = A.summary(s), comb = A.combine(s);
     T.hooks.alerts.forEach(f => { try { f(s, sum, comb); } catch (e) { console.warn(e); } });
     sum.alerts.sort((x, y) => (x.lvl === y.lvl ? x.d - y.d : x.lvl === 'warn' ? -1 : 1));
-    document.documentElement.style.setProperty('--accent', accent());
+    setAccent(accent());
     document.querySelectorAll('.modes [data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === s.mode)));
     M.setLegs(legFeatures(s));
     M.syncMarkers(s.waypoints);
@@ -562,7 +566,7 @@
           <span class="lib-m">${I(e.mode)}</span>
           <span class="lib-t"><b>${U.esc(e.name)}</b><small>${U.nf(e.km, 1)} km · ${new Date(e.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}</small></span>
           <button class="btn btn-sm" data-open="${e.id}">Ouvrir</button>
-          <button class="icon-btn" data-del="${e.id}" aria-label="Supprimer">${I('trash')}</button></li>`).join('')}</ul>`
+          <span class="lib-del" data-id="${e.id}"><button class="icon-btn" data-ask="${e.id}" aria-label="Supprimer ${U.esc(e.name)}">${I('trash')}</button></span></li>`).join('')}</ul>`
           : '<p class="muted">Aucun parcours enregistré pour l’instant. Ils restent dans ce navigateur, sur cet appareil.</p>'}`;
     };
     draw();
@@ -594,7 +598,19 @@
         const data = T.storage.library.get(b.dataset.open);
         if (data) { if (guard()) return; S.replace(data); UI.close(); setTimeout(fitAll, 50); }
       }
-      if (b.dataset.del) { T.storage.library.remove(b.dataset.del); draw(); }
+      if (b.dataset.ask) {
+        const slot = b.parentElement;
+        slot.innerHTML = `<span class="lib-conf">Supprimer ce parcours ? <button class="btn btn-sm btn-danger" data-confdel="${b.dataset.ask}">Supprimer</button> <button class="btn btn-sm" data-cancel>Annuler</button></span>`;
+        return;
+      }
+      if (b.hasAttribute('data-cancel')) { draw(); return; }
+      if (b.dataset.confdel) {
+        T.storage.library.remove(b.dataset.confdel);
+        UI.toast('Parcours supprimé');
+        T.sync.auto();
+        draw();
+        return;
+      }
     });
     UI.modal({ title: 'Mes parcours', body, wide: true });
   }
@@ -634,7 +650,7 @@
     // Aperçu immédiat de la couleur ; « Annuler » ou fermer rétablit la couleur choisie (via render)
     document.querySelectorAll('input[name="set-accent"]').forEach(r => r.addEventListener('change', () => {
       const c = /^#/.test(r.value) ? r.value : T.config.modes[st().mode].accent;
-      document.documentElement.style.setProperty('--accent', c);
+      setAccent(c);
     }));
   }
 

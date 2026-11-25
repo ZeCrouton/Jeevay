@@ -79,6 +79,7 @@ T.storage = (() => {
     } catch (e) { cache = lsRead(); res(); }
   });
   const read = () => cache;
+  const pruneTomb = d => Object.fromEntries(Object.entries(d).sort((x, y) => y[1] - x[1]).slice(0, 500));
   const write = all => {
     cache = all;
     if (!idbOk) { localStorage.setItem(LIB, JSON.stringify(all)); return; }
@@ -86,7 +87,7 @@ T.storage = (() => {
   };
 
   return {
-    serialize, deserialize, ready,
+    serialize, deserialize, ready, pruneTomb,
     library: {
       all: read, replaceAll: write,
       list: () => read().map(({ data, ...meta }) => meta),
@@ -96,10 +97,16 @@ T.storage = (() => {
         const entry = { id: U.uid(), name: s.name || 'Sans nom', mode: s.mode, km: distance / 1000, date: Date.now(), data: serialize(s) };
         const i = all.findIndex(x => x.name === entry.name);
         if (i >= 0) { entry.id = all[i].id; all.splice(i, 1); }
+        if (T.settings.get().deleted && T.settings.get().deleted[entry.id]) entry.id = U.uid();   // id déjà supprimé : nouvel id
         all.unshift(entry);
         write(all);
       },
-      remove(id) { write(read().filter(x => x.id !== id)); }
+      // Suppression : l'id est mémorisé (« pierre tombale ») pour ne pas revenir par la synchronisation
+      remove(id) {
+        const d = { ...(T.settings.get().deleted || {}), [id]: Date.now() };
+        T.settings.set({ deleted: pruneTomb(d) });
+        write(read().filter(x => x.id !== id));
+      }
     }
   };
 })();

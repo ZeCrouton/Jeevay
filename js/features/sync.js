@@ -23,19 +23,24 @@ T.sync = (() => {
       return await r.json();
     } finally { clearTimeout(t); }
   }
-  // Fusion par nom de parcours : le plus récent l'emporte. Les suppressions ne sont pas propagées.
-  function merge(a, b) {
+  // Fusion par identifiant : le plus récent l'emporte. Les suppressions (pierres tombales) sont partagées entre appareils.
+  function merge(a, b, dead) {
     const m = new Map();
-    [...a, ...b].forEach(e => { const o = m.get(e.name); if (!o || (e.date || 0) > (o.date || 0)) m.set(e.name, e); });
+    [...a, ...b].forEach(e => { if (dead[e.id]) return; const o = m.get(e.id); if (!o || (e.date || 0) > (o.date || 0)) m.set(e.id, e); });
     return [...m.values()].sort((x, y) => (y.date || 0) - (x.date || 0));
   }
   async function run(c = code()) {
     await T.storage.ready;
     const local = T.storage.library.all();
-    const remote = (await call('GET', c)).lib || [];
-    const merged = merge(local, remote);
+    const rem = await call('GET', c);
+    const remote = rem.lib || [];
+    const dead = { ...(T.settings.get().deleted || {}) };
+    (rem.del || []).forEach(id => { if (!dead[id]) dead[id] = Date.now(); });
+    const merged = merge(local, remote, dead);
+    const tomb = T.storage.pruneTomb(dead);
+    T.settings.set({ deleted: tomb });
     T.storage.library.replaceAll(merged);
-    await call('PUT', c, JSON.stringify({ lib: merged }));
+    await call('PUT', c, JSON.stringify({ lib: merged, del: Object.keys(tomb) }));
     T.settings.set({ syncAt: Date.now() });
     return { total: merged.length, added: merged.length - local.length };
   }
