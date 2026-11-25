@@ -26,6 +26,7 @@ jobs:
           osmium tags-filter france.osm.pbf \
             nwr/amenity=fuel,drinking_water,toilets,cafe,restaurant,bicycle_repair_station \
             nwr/shop=bicycle n/mountain_pass=yes n/tourism=viewpoint \
+            nwr/tourism=hotel,motel,guest_house,hostel,chalet,apartment,camp_site,alpine_hut \
             -o poi.osm.pbf --overwrite
           osmium export poi.osm.pbf -f geojsonseq -x print_record_separator=false \
             --attributes=type,id -o poi.geojsonseq --overwrite

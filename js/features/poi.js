@@ -6,14 +6,22 @@
   let data = { sig: null, mode: null, key: null, items: [], loading: false, error: false };
   let ctrl = null, timer = 0, showAll = false, projCache = { key: '', items: [] }, coords = [];
 
-  const sigOf = s => s.legs.map(l => l.id + ':' + l.rev + ':' + l.status).join('|');
+  // Les nuits font partie de la signature : leurs alentours sont chargés pour les hébergements
+  const nightsOf = s => T.days ? T.days.nights(s) : [];
+  const sigOf = s => s.legs.map(l => l.id + ':' + l.rev + ':' + l.status).join('|') + '#' + nightsOf(s).map(n => n.c.map(x => x.toFixed(4)).join(',')).join(';');
   const catsFor = mode => T.settings.get().poiCats[mode] || P.BY_MODE[mode].on;
   const ready = s => s.legs.length && s.legs.every(l => l.status !== 'pending');
 
-  function project(raw, comb) {
+  function project(raw, comb, nights) {
     const { pts } = U.resample(comb.coords, Math.max(80, comb.total / 6000));
     const kx = Math.cos(comb.coords[0][1] * Math.PI / 180), items = [];
     for (const it of raw) {
+      // Hébergements : le long du tracé, ou dans un rayon de quelques km autour d'une nuit
+      if (it.cat === 'sleep' && nights.length) {
+        let nk = -1, nd = Infinity;
+        nights.forEach(n => { const x = U.dist(n.c, it.c); if (x < nd) { nd = x; nk = n.k; } });
+        if (nd <= P.CATS.sleep.nightRadius) { const n = nights.find(x => x.k === nk); items.push({ ...it, d: n.d, off: nd, night: nk }); continue; }
+      }
       let best = Infinity, bd = 0;
       for (const p of pts) {
         const dx = (p.c[0] - it.c[0]) * kx, dy = p.c[1] - it.c[1], dd = dx * dx + dy * dy;
@@ -30,13 +38,13 @@
     const sig = sigOf(s);
     if (data.sig !== sig || data.mode !== s.mode) {
       coords = comb.coords;
-      data = { ...data, sig, mode: s.mode, key: comb.coords.length > 1 ? P.key(comb.coords) : null, error: false };
+      data = { ...data, sig, mode: s.mode, nights: nightsOf(s), key: comb.coords.length > 1 ? P.key(comb.coords, nightsOf(s).map(n => n.c)) : null, error: false };
       showAll = false;
       schedule(s);
     }
     const raw = data.key ? P.collect(data.key, P.BY_MODE[s.mode].all) : [];
     const k = sig + '#' + raw.length;
-    if (projCache.key !== k) projCache = { key: k, items: raw.length ? project(raw, comb) : [] };
+    if (projCache.key !== k) projCache = { key: k, items: raw.length ? project(raw, comb, data.nights || []) : [] };
     data.items = projCache.items;
   }
 
@@ -76,15 +84,18 @@
     const it = data.items.find(x => x.id === el.dataset.id);
     if (!it) return;
     const t = it.tags, cat = P.CATS[it.cat];
-    const extra = [t.opening_hours && `Horaires : ${U.esc(t.opening_hours)}`, t.ele && `Altitude : ${U.esc(t.ele)} m`,
+    const extra = [it.cat === 'sleep' && P.SLEEP_TYPES[t.tourism], t.stars && /^\d/.test(t.stars) && `${'★'.repeat(Math.min(5, parseInt(t.stars, 10)))}`,
+      t.opening_hours && `Horaires : ${U.esc(t.opening_hours)}`, t.ele && `Altitude : ${U.esc(t.ele)} m`,
       t['fuel:diesel'] === 'yes' && 'Gazole', t['fuel:octane_98'] === 'yes' && 'SP98', t.automated === 'yes' && 'Automate 24/24']
       .filter(Boolean).join(' · ');
+    const tel = t.phone && String(t.phone).split(';')[0].trim(), web = t.website && /^https?:\/\//.test(t.website) ? t.website : null;
+    const where = it.night != null ? `à ${U.fmtKm(it.off)} de la nuit ${it.night + 1}` : `km ${U.nf(it.d / 1000, 1)} · à ${U.fmtKm(it.off)} du tracé`;
     const node = document.createElement('div');
     node.className = 'pop';
     node.innerHTML = `<div class="pop-h"><i class="dot" style="background:${cat.color}"></i><b>${U.esc(it.name)}</b></div>
-      <p class="pop-m">${cat.label} · km ${U.nf(it.d / 1000, 1)} · à ${U.fmtKm(it.off)} du tracé</p>
+      <p class="pop-m">${cat.label} · ${where}</p>
       ${extra ? `<p class="pop-x">${extra}</p>` : ''}
-      <div class="pop-a"><a class="btn btn-sm" href="${U.streetViewUrl(it.c)}" target="_blank" rel="noopener">${I('eye')}Street View</a>
+      <div class="pop-a">${tel ? `<a class="btn btn-sm" href="tel:${U.esc(tel.replace(/[^+\d]/g, ''))}">${U.esc(tel)}</a>` : ''}${web ? `<a class="btn btn-sm" href="${U.esc(web)}" target="_blank" rel="noopener">Site web</a>` : ''}<a class="btn btn-sm" href="${U.streetViewUrl(it.c)}" target="_blank" rel="noopener">${I('eye')}Street View</a>
       <button class="btn btn-sm" data-add>${I('plus')}Ajouter comme étape</button></div>`;
     node.querySelector('[data-add]').addEventListener('click', () => { T.map.closePopup(); insertStop(it.c); });
     T.map.openPopup(c || it.c, node);
@@ -141,7 +152,7 @@
       <div class="cats">${all.map(k => `<button class="cat${on.has(k) ? ' on' : ''}" data-act="poiCat" data-k="${k}" style="--c:${P.CATS[k].color}"><i></i>${P.CATS[k].label}${counts[k] ? `<b>${counts[k]}</b>` : ''}</button>`).join('')}</div>
       ${data.error ? `<p class="muted small">Lieux momentanément indisponibles.${data.why ? `<br><small>${U.esc(data.why)}</small>` : ''}</p>` : ''}
       ${!data.loading && !data.error && P.cached(data.key, [...on]) && !list.length ? `<p class="muted small">${P.covered(data.key) ? 'Aucun lieu de ces catégories près du parcours.' : 'Lieux disponibles en France uniquement pour le moment.'}</p>` : ''}
-      ${rows.length ? `<ul class="pois">${rows.map(it => `<li><button data-act="poiGo" data-id="${it.id}"><i class="dot" style="background:${P.CATS[it.cat].color}"></i><span class="pn">${U.esc(it.name)}</span><span class="pk">km ${U.nf(it.d / 1000, 1)}</span></button></li>`).join('')}</ul>` : ''}
+      ${rows.length ? `<ul class="pois">${rows.map(it => `<li><button data-act="poiGo" data-id="${it.id}"><i class="dot" style="background:${P.CATS[it.cat].color}"></i><span class="pn">${U.esc(it.name)}</span><span class="pk">${it.night != null ? `nuit ${it.night + 1}` : `km ${U.nf(it.d / 1000, 1)}`}</span></button></li>`).join('')}</ul>` : ''}
       ${list.length > rows.length ? `<button class="mini" data-act="poiMore">Voir les ${list.length} lieux</button>` : ''}`;
     T.map.setPois(list.map(it => ({ type: 'Feature', geometry: { type: 'Point', coordinates: it.c }, properties: { id: it.id, color: P.CATS[it.cat].color } })));
   });
@@ -160,5 +171,6 @@
     poiPopup: (el, c) => popup(el, c)
   });
 
-  T.poi = { get data() { return data; }, visible };
+  function ensureCat(k) { if (!new Set(catsFor(T.app.st().mode)).has(k)) toggleCat(k); }
+  T.poi = { get data() { return data; }, visible, ensureCat };
 })();

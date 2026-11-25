@@ -6,8 +6,15 @@ import json, math, os, sys, datetime
 
 SIZE = 0.25
 EXTRA = ('opening_hours', 'ele', 'fuel:diesel', 'fuel:octane_98', 'automated', 'brand')
+# Hébergements : type, étoiles et moyens de contact (téléphone, site web)
+SLEEP = ('hotel', 'motel', 'guest_house', 'hostel', 'chalet', 'apartment', 'camp_site', 'alpine_hut')
+SLEEP_EXTRA = ('tourism', 'stars', 'phone', 'contact:phone', 'website', 'contact:website')
 
 def cat_of(t):
+    tr = t.get('tourism')
+    if tr in SLEEP:
+        # locations sans nom (souvent des logements de particuliers) ignorées
+        return 'sleep' if t.get('name') or tr in ('hotel', 'motel', 'camp_site', 'alpine_hut', 'hostel') else None
     a = t.get('amenity')
     if a == 'fuel': return 'fuel'
     if a == 'drinking_water': return 'water'
@@ -42,7 +49,8 @@ def main(src, out):
             c = centre(ft['geometry'])
             if not c: continue
             x, y = math.floor(c[0] / SIZE), math.floor(c[1] / SIZE)
-            ex = {k: str(t[k])[:80] for k in EXTRA if k in t}
+            keys = EXTRA + SLEEP_EXTRA if cat == 'sleep' else EXTRA
+            ex = {k.replace('contact:', ''): str(t[k])[:120] for k in keys if k in t}
             name = t.get('name') or t.get('brand') or t.get('operator') or ''
             tiles.setdefault(f'{x}_{y}', []).append([cat, round(c[0], 5), round(c[1], 5), str(name)[:80], ex or 0, uid])
             n += 1

@@ -25,7 +25,7 @@
     return {
       v: 1, n: s.name, m: s.mode,
       w: U.encode(s.waypoints.map(w => w.c), 5),
-      k: s.waypoints.map(w => (w.locked ? 1 : 0)).join(''),
+      k: s.waypoints.map(w => (w.locked ? 1 : 0) + (w.gap ? 2 : 0) + (w.night ? 4 : 0)).join(''),
       l: s.legs.map(L => L.kind === 'track'
         ? ['t', U.encode(U.simplify(L.coords, 5), 5), L.name || '']
         : L.kind === 'line' ? ['l'] : ['r', L.road])
@@ -35,7 +35,7 @@
   function unpack(o) {
     const mode = T.config.modes[o.m] ? o.m : 'moto';
     const cs = U.decode(o.w, 5), lk = String(o.k || '');
-    const waypoints = cs.map((c, i) => ({ id: U.uid(), c, locked: lk[i] === '1', name: null }));
+    const waypoints = cs.map((c, i) => { const f = +lk[i] || 0; return { id: U.uid(), c, locked: !!(f & 1), name: null, ...(f & 2 ? { gap: true } : {}), ...(f & 4 ? { night: true } : {}) }; });
     const legs = [];
     for (let i = 0; i < waypoints.length - 1; i++) {
       const a = waypoints[i], b = waypoints[i + 1], d = (o.l || [])[i] || ['r'];

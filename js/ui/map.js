@@ -145,9 +145,9 @@ T.map = (() => {
       const kind = n === 1 ? 'start' : i === 0 ? 'start' : i === n - 1 ? 'end' : 'mid';
       const gap = w.gap && kind === 'mid';
       if (kind === 'mid' && !gap) num++;
-      el.className = `wp wp-${kind}${w.locked ? ' wp-locked' : ''}${gap ? ' wp-gap' : ''}`;
+      el.className = `wp wp-${kind}${w.locked ? ' wp-locked' : ''}${gap ? ' wp-gap' : ''}${w.night && kind === 'mid' ? ' wp-night' : ''}`;
       el.textContent = i === 0 ? 'D' : i === n - 1 ? 'A' : gap ? '' : String(num);
-      el.title = gap ? 'Coupure du signal GPS, comblée par la route' : (w.name ? w.name + ' — ' : '') + (w.locked ? 'extrémité d’un tracé importé' : 'glisser pour déplacer');
+      el.title = gap ? 'Coupure du signal GPS, comblée par la route' : (w.night && kind === 'mid' ? 'Nuit — ' : '') + (w.name ? w.name + ' — ' : '') + (w.locked ? 'extrémité d’un tracé importé' : 'glisser pour déplacer');
       m.setDraggable(!w.locked && !(h.isLocked && h.isLocked()));
       const p = m.getLngLat();
       if (Math.abs(p.lng - w.c[0]) > 1e-9 || Math.abs(p.lat - w.c[1]) > 1e-9) m.setLngLat(w.c);

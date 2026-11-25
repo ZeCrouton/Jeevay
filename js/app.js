@@ -143,12 +143,15 @@
   }
   const countGaps = c => { let n = 0; for (let i = 1; i < c.length; i++) if (U.dist(c[i - 1], c[i]) > GAP) n++; return n; };
 
-  function addItems(items, { replace, connect, fill, snap }) {
+  function addItems(items, { replace, connect, fill, snap, nights }) {
     if (guard()) return;
     S.commit(s => {
       if (replace) { s.waypoints = []; s.legs = []; }
+      let tracks = 0;
       for (const it of items) {
         const all = it.reversed ? it.coords.slice().reverse() : it.coords;
+        // Un fichier = une journée : la fin du tracé précédent devient une étape « Nuit »
+        if (nights && it.type !== 'points' && tracks++ > 0 && s.waypoints.length > 1) s.waypoints[s.waypoints.length - 1].night = true;
         if (it.type === 'points') {
           all.forEach(c => s.waypoints.push({ id: U.uid(), c }));
           continue;
@@ -252,11 +255,19 @@
     el.innerHTML = `<div class="pop-h"><b>${U.esc(label)}</b></div>
       ${S.locked ? '<p class="pop-m">Tracé verrouillé</p>' : w.locked ? '<p class="pop-m">Extrémité d’un tracé importé</p>' : '<p class="pop-m">Glissez le point pour le déplacer</p>'}
       <div class="pop-a">
+        ${i > 0 && i < s.waypoints.length - 1 ? `<button class="btn btn-sm${w.night ? ' btn-night' : ''}" data-a="night">${I('bed')}${w.night ? 'Retirer la nuit' : 'Nuit ici'}</button>` : ''}
         <a class="btn btn-sm" href="${U.streetViewUrl(w.c)}" target="_blank" rel="noopener">${I('eye')}Street View</a>
         ${S.locked ? '' : `<button class="btn btn-sm btn-danger" data-a="del">${I('trash')}Supprimer</button>`}
       </div>`;
     const del = el.querySelector('[data-a="del"]');
     if (del) del.addEventListener('click', () => removePoint(id));
+    const nt = el.querySelector('[data-a="night"]');
+    // Nuit : simple repère de planification, permis même tracé verrouillé
+    if (nt) nt.addEventListener('click', () => {
+      M.closePopup();
+      S.commit(x => { x.waypoints = x.waypoints.map(p => p.id === id ? { ...p, night: !p.night || undefined } : p); }, true);
+      UI.toast(w.night ? 'Nuit retirée' : 'Nuit ajoutée : le parcours est découpé en journées');
+    });
     M.openPopup(w.c, el);
   }
 
@@ -447,6 +458,7 @@
         <button class="btn btn-sm" data-more="1">${I('plus')}Ajouter un autre fichier</button>
         <label class="chk"><input type="checkbox" id="imp-snap" ${T.settings.get().snapTracks !== false ? 'checked' : ''}> Recaler les tracés sur les routes (corrige les raccourcis des fichiers GPS peu précis)</label>
         <label class="chk"><input type="checkbox" id="imp-fill" ${T.settings.get().fillGaps !== false ? 'checked' : ''}> Combler les coupures du signal GPS par la route (sinon en ligne droite)</label>
+        ${items.filter(i => i.type !== 'points' && !i.dup).length > 1 ? `<label class="chk"><input type="checkbox" id="imp-nights" ${T.settings.get().importNights !== false ? 'checked' : ''}> Une nuit entre chaque fichier (un fichier = une journée)</label>` : ''}
         <label class="chk"><input type="checkbox" id="imp-connect" ${T.settings.get().autoConnect ? 'checked' : ''}> Relier les tracés entre eux par la route (sinon en ligne droite)</label>
         ${hasRoute ? '<label class="chk"><input type="checkbox" id="imp-replace"> Remplacer le parcours actuel (sinon, ajout à la fin)</label>' : ''}`;
     };
@@ -483,9 +495,9 @@
           if (!pick.length) { UI.toast('Aucun tracé sélectionné', 'error'); return false; }
           const connect = $('#imp-connect', root).checked, rep = $('#imp-replace', root);
           const fill = $('#imp-fill', root).checked;
-          const snap = $('#imp-snap', root).checked;
-          T.settings.set({ autoConnect: connect, fillGaps: fill, snapTracks: snap });
-          addItems(pick, { replace: rep ? rep.checked : false, connect, fill, snap });
+          const snap = $('#imp-snap', root).checked, ni = $('#imp-nights', root), nights = ni ? ni.checked : false;
+          T.settings.set({ autoConnect: connect, fillGaps: fill, snapTracks: snap, ...(ni ? { importNights: nights } : {}) });
+          addItems(pick, { replace: rep ? rep.checked : false, connect, fill, snap, nights });
           UI.toast(`${pick.length} élément${pick.length > 1 ? 's' : ''} importé${pick.length > 1 ? 's' : ''}`);
         }
       }]
@@ -536,6 +548,7 @@
     if (!A.combine(s).coords.length) { UI.toast('Rien à exporter pour le moment', 'error'); return; }
     if (s.legs.some(l => l.status === 'pending')) UI.toast('Des tronçons sont encore en calcul : ils ne seront pas inclus');
     const gm = T.io.export.googleMapsUrl(s);
+    const D = T.days ? T.days.days(s) : [], nd = D.length;
     UI.modal({
       title: 'Exporter le parcours',
       body: `<label class="field"><span>Nom du fichier</span><input id="ex-name" value="${U.esc(T.io.export.safeName(s.name))}"></label>
@@ -546,14 +559,23 @@
           <label><input type="radio" name="ex-k" value="lr"><span><b>Liberty Rider</b><small>Un seul fichier, 99 points au plus (limite de Liberty Rider) : il recalcule la route entre eux</small></span></label>
         </fieldset>
         <label class="chk"><input type="checkbox" id="ex-wpt" checked> Inclure les étapes comme points d’intérêt</label>
+        ${nd > 1 ? `<label class="chk"><input type="checkbox" id="ex-days"> Un fichier par jour (${nd} fichiers)</label>` : ''}
         ${gm ? `<p class="muted small">Autre option : <a href="${gm}" target="_blank" rel="noopener">ouvrir dans Google Maps</a> (approximatif, Google recalcule à sa façon).</p>` : ''}`,
       actions: [{ label: 'Annuler' }, {
         label: 'Télécharger le GPX', primary: true, onClick: root => {
           const k = root.querySelector('input[name="ex-k"]:checked').value;
-          const txt = T.io.export.gpx(st(), k === 'lr' ? { rte: true } : { trk: k !== 'rte', rte: k !== 'trk', wpt: $('#ex-wpt', root).checked });
-          const fn = (T.io.export.safeName($('#ex-name', root).value) || 'parcours') + '.gpx';
-          T.io.export.download(fn, txt, 'application/gpx+xml');
-          UI.toast('GPX téléchargé : ' + fn);
+          const opts = k === 'lr' ? { rte: true } : { trk: k !== 'rte', rte: k !== 'trk', wpt: $('#ex-wpt', root).checked };
+          const base = T.io.export.safeName($('#ex-name', root).value) || 'parcours';
+          const perDay = nd > 1 && $('#ex-days', root) && $('#ex-days', root).checked;
+          if (!perDay) {
+            T.io.export.download(base + '.gpx', T.io.export.gpx(st(), opts), 'application/gpx+xml');
+            UI.toast('GPX téléchargé : ' + base + '.gpx');
+            return;
+          }
+          // Un fichier par jour (téléchargements espacés : certains navigateurs bloquent les rafales)
+          D.forEach((d, j) => setTimeout(() => T.io.export.download(`${base}-jour-${j + 1}.gpx`,
+            T.io.export.gpx(st(), { ...opts, range: [d.a, d.b], title: `${st().name || 'Parcours'} - jour ${j + 1}` }), 'application/gpx+xml'), j * 700));
+          UI.toast(`${nd} fichiers GPX téléchargés (un par jour)`, 'info', 6000);
         }
       }]
     });
@@ -627,6 +649,12 @@
         <label class="field"><span>Allure de course (min:s par km)</span><input id="set-pace" value="${pace}" inputmode="numeric" placeholder="6:00"></label>
         <label class="field"><span>Autonomie de la moto (km, pour l’alerte carburant)</span><input id="set-fuel" type="number" min="50" max="900" value="${s.fuelRange}"></label>
         <label class="field"><span>Vitesse moyenne à vélo (km/h)</span><input id="set-bike" type="number" min="8" max="45" value="${s.bikeSpeed}"></label>
+        <fieldset class="radios"><legend>Road trip sur plusieurs jours</legend>
+          <label class="chk"><input type="checkbox" id="set-pauses" ${s.pauses ? 'checked' : ''}> Ajouter des pauses à la durée estimée</label>
+          <div class="num-row">Pause de <input id="set-pmin" class="num-in" type="number" min="5" max="60" value="${s.pauseMin}"> min toutes les <input id="set-pevery" class="num-in" type="number" min="1" max="6" step="0.5" value="${s.pauseEvery}"> h de route</div>
+          <label class="chk"><input type="checkbox" id="set-days" ${s.autoDays ? 'checked' : ''}> Découper automatiquement en journées (tant qu’aucune étape « Nuit » n’est posée)</label>
+          <div class="num-row">Environ <input id="set-daykm" class="num-in" type="number" min="5" max="1500" value="${T.days.dayKm(st().mode)}"> km par jour (${U.esc(T.config.modes[st().mode].label.toLowerCase())})</div>
+        </fieldset>
         <fieldset class="radios"><legend>Couleur de l’appli</legend><div class="swatches">${[['auto', 'Automatique : une couleur par activité'], ...T.config.palette].map(([c, n]) => `<label title="${U.esc(n)}"><input type="radio" name="set-accent" value="${c}" aria-label="${U.esc(n)}" ${(s.accent || 'auto') === c ? 'checked' : ''}><i style="--c:${c === 'auto' ? '#ff4d00' : c}" class="${c === 'auto' ? 'sw-auto' : ''}"></i></label>`).join('')}</div></fieldset>
         <label class="field"><span>Fond de carte</span><select id="set-style">${T.config.map.styles.map(x => `<option value="${x.id}" ${x.id === s.mapStyle ? 'selected' : ''}>${x.label}</option>`).join('')}</select></label>
         <p class="muted small">Tout fonctionne gratuitement avec des services ouverts (OpenStreetMap, Valhalla, Open-Meteo, Photon). Vos parcours restent dans votre navigateur. Version ${T.config.version}.</p>`,
@@ -640,6 +668,8 @@
           const speedChanged = runPace !== s.runPace || bikeSpeed !== s.bikeSpeed;
           T.settings.set({ snapMain: $('#set-snap', root).checked, runPace, bikeSpeed, mapStyle: style, accent: accentPick,
             fuelRange: U.clamp(+$('#set-fuel', root).value || s.fuelRange, 50, 900),
+            pauses: $('#set-pauses', root).checked, pauseMin: U.clamp(+$('#set-pmin', root).value || 15, 5, 60), pauseEvery: U.clamp(+$('#set-pevery', root).value || 2, 1, 6),
+            autoDays: $('#set-days', root).checked, dayKm: { ...s.dayKm, [st().mode]: U.clamp(+$('#set-daykm', root).value || T.days.DEF_KM[st().mode], 5, 1500) },
             lastRoad: { ...s.lastRoad, [st().mode]: $('#set-road', root).value } });
           M.setStyle(style);
           if (speedChanged && st().mode !== 'moto') {
@@ -702,7 +732,7 @@
         ['slope', 'Pente', 'Colore le tracé selon la pente.'], ['layers', 'Fond de carte', 'Change l’aspect de la carte.'], ['locate', 'Me localiser', 'Centre la carte sur votre position.'],
         ['play', 'Parcourir le tracé', 'Un point se déplace sur le tracé du début à la fin : pause, reprise, vitesse, recommencer, ou faites glisser la barre.'], ['hash', 'Points du tracé', 'Chaque appui change l’affichage : points numérotés, points sans numéro, puis tracé seul (aucun point).'], ['lock', 'Verrouiller', 'Empêche toute modification du tracé par erreur.'], ['help', 'Aide', 'Affiche cette page.']]],
       ['Panneau du parcours', [['download', 'Importer', 'Ouvre un fichier GPX pour le charger sur la carte.'], ['link', 'Partager', 'Crée un lien vers votre parcours.'],
-        ['upload', 'Exporter GPX', 'Enregistre le parcours en fichier GPX pour votre GPS ou votre montre.'], ['more', 'Plus d’options', 'Mes parcours, boucle, road-book, inverser le sens, Google Maps, réglages, tout effacer.'], ['link', 'Retrouver mes parcours (code)', 'Crée un code personnel pour retrouver vos parcours enregistrés sur un autre appareil. Gardez-le secret : il donne accès à vos parcours.']]]
+        ['upload', 'Exporter GPX', 'Enregistre le parcours en fichier GPX pour votre GPS ou votre montre.'], ['bed', 'Nuit', 'Touchez une étape puis « Nuit ici » : le parcours est découpé en journées (distance, durée et GPX par jour, hébergements autour de la nuit).'], ['more', 'Plus d’options', 'Mes parcours, boucle, road-book, inverser le sens, Google Maps, réglages, tout effacer.'], ['link', 'Retrouver mes parcours (code)', 'Crée un code personnel pour retrouver vos parcours enregistrés sur un autre appareil. Gardez-le secret : il donne accès à vos parcours.']]]
     ];
     UI.modal({
       title: 'À quoi servent les boutons ?', wide: true,

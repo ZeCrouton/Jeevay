@@ -3,7 +3,7 @@ window.T = window.T || {};
 
 T.settings = (() => {
   const KEY = T.config.storagePrefix + 'settings';
-  const def = { snapMain: true, lastRoad: {}, runPace: 6, bikeSpeed: 22, autoConnect: true, mapStyle: 'liberty', colorBy: 'road', nums: 'num', fuelRange: 200, poiCats: {} };
+  const def = { pauses: false, pauseEvery: 2, pauseMin: 15, autoDays: false, dayKm: {}, snapMain: true, lastRoad: {}, runPace: 6, bikeSpeed: 22, autoConnect: true, mapStyle: 'liberty', colorBy: 'road', nums: 'num', fuelRange: 200, poiCats: {} };
   const s = { ...def };
   try { Object.assign(s, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* stockage indisponible */ }
   // v1.1 : la préférence par défaut devient « proposé par l'app »
@@ -20,7 +20,7 @@ T.storage = (() => {
   function serialize(s) {
     return {
       v: 2, name: s.name, mode: s.mode,
-      waypoints: s.waypoints.map(w => ({ id: w.id, c: [+w.c[0].toFixed(6), +w.c[1].toFixed(6)], name: w.name || null, locked: !!w.locked })),
+      waypoints: s.waypoints.map(w => ({ id: w.id, c: [+w.c[0].toFixed(6), +w.c[1].toFixed(6)], name: w.name || null, locked: !!w.locked, ...(w.gap ? { gap: true } : {}), ...(w.night ? { night: true } : {}) })),
       legs: s.legs.map(L => ({
         id: L.id, from: L.from, to: L.to, kind: L.kind, road: L.road, mode: L.mode, name: L.name || null,
         ok: L.status === 'ok', poly: L.coords ? U.encode(L.coords) : null,
@@ -33,7 +33,7 @@ T.storage = (() => {
   }
 
   function deserialize(o) {
-    const wps = (o.waypoints || []).map(w => ({ id: w.id, c: w.c, name: w.name || null, locked: !!w.locked }));
+    const wps = (o.waypoints || []).map(w => ({ id: w.id, c: w.c, name: w.name || null, locked: !!w.locked, ...(w.gap ? { gap: true } : {}), ...(w.night ? { night: true } : {}) }));
     const byId = Object.fromEntries(wps.map(w => [w.id, w]));
     const legs = (o.legs || []).filter(L => byId[L.from] && byId[L.to]).map(L => {
       const coords = L.poly ? U.decode(L.poly) : null;

@@ -13,27 +13,31 @@ T.providers.poi = (() => {
     water: { label: 'Points d’eau', color: '#1c7ed6', radius: 300 },
     food: { label: 'Cafés et restos', color: '#c2255c', radius: 150 },
     bike: { label: 'Réparation vélo', color: '#0b7285', radius: 600 },
-    wc: { label: 'Toilettes', color: '#868e96', radius: 200 }
+    wc: { label: 'Toilettes', color: '#868e96', radius: 200 },
+    sleep: { label: 'Hébergements', color: '#2f3a8f', radius: 400, nightRadius: 8000 }
   };
+  const SLEEP_TYPES = { hotel: 'Hôtel', motel: 'Motel', guest_house: 'Chambre d’hôtes', hostel: 'Auberge', chalet: 'Gîte / chalet', apartment: 'Location', camp_site: 'Camping', alpine_hut: 'Refuge' };
   const BY_MODE = {
-    moto: { all: ['fuel', 'pass', 'view', 'food'], on: ['fuel', 'pass'] },
-    velo: { all: ['water', 'pass', 'view', 'food', 'bike', 'wc'], on: ['water', 'pass', 'bike'] },
-    run: { all: ['water', 'wc', 'view', 'pass'], on: ['water', 'wc'] }
+    moto: { all: ['fuel', 'pass', 'view', 'food', 'sleep'], on: ['fuel', 'pass', 'sleep'] },
+    velo: { all: ['water', 'pass', 'view', 'food', 'bike', 'wc', 'sleep'], on: ['water', 'pass', 'bike', 'sleep'] },
+    run: { all: ['water', 'wc', 'view', 'pass', 'sleep'], on: ['water', 'wc'] }
   };
-  const TAGS = { fuel: { amenity: 'fuel' }, water: { amenity: 'drinking_water' }, wc: { amenity: 'toilets' }, food: { amenity: 'restaurant' }, bike: { shop: 'bicycle' }, pass: { mountain_pass: 'yes' }, view: { tourism: 'viewpoint' } };
+  const TAGS = { fuel: { amenity: 'fuel' }, water: { amenity: 'drinking_water' }, wc: { amenity: 'toilets' }, food: { amenity: 'restaurant' }, bike: { shop: 'bicycle' }, pass: { mountain_pass: 'yes' }, view: { tourism: 'viewpoint' }, sleep: { tourism: 'hotel' } };
   const SIZE = 0.25, MARGIN = 1300; // marge autour du tracé (m), au moins le plus grand rayon de recherche
 
   const routes = new Map(); // clé du tracé -> cases traversées
   const tiles = new Map();  // case -> lieux
   let index = null, indexP = null;
 
-  // Cases traversées par le parcours (et voisines quand il passe près d'un bord)
-  function key(coords) {
-    const set = new Set(), m = MARGIN / 111000;
-    T.util.resample(coords, 400).pts.forEach(({ c }) => {
-      const mx = m / Math.max(0.2, Math.cos(c[1] * Math.PI / 180));
+  // Cases traversées par le parcours (et voisines quand il passe près d'un bord), plus les alentours des nuits
+  function key(coords, around = []) {
+    const set = new Set();
+    const addBox = (c, metres) => {
+      const m = metres / 111000, mx = m / Math.max(0.2, Math.cos(c[1] * Math.PI / 180));
       for (const dx of [-mx, 0, mx]) for (const dy of [-m, 0, m]) set.add(Math.floor((c[0] + dx) / SIZE) + '_' + Math.floor((c[1] + dy) / SIZE));
-    });
+    };
+    T.util.resample(coords, 400).pts.forEach(({ c }) => addBox(c, MARGIN));
+    around.forEach(c => addBox(c, CATS.sleep.nightRadius + 500));
     const list = [...set].sort(), k = list.join(',');
     routes.set(k, list);
     return k;
@@ -65,7 +69,7 @@ T.providers.poi = (() => {
 
   function parse(j) {
     return (j.p || []).map(([cat, lon, lat, name, ex, id]) => ({
-      id, cat, c: [lon, lat], name: name || CATS[cat].label.replace(/s$/, '').replace(/s et /, ' / '),
+      id, cat, c: [lon, lat], name: name || (cat === 'sleep' && ex && SLEEP_TYPES[ex.tourism]) || CATS[cat].label.replace(/s$/, '').replace(/s et /, ' / '),
       tags: { ...TAGS[cat], ...(ex || {}) }
     }));
   }
@@ -95,5 +99,5 @@ T.providers.poi = (() => {
   // Le parcours passe-t-il dans la zone couverte (France) ?
   const covered = k => !index || (routes.get(k) || []).some(t => index.set.has(t));
 
-  return { CATS, BY_MODE, key, load, cached, collect, covered };
+  return { CATS, BY_MODE, SLEEP_TYPES, key, load, cached, collect, covered };
 })();
