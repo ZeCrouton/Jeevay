@@ -21,21 +21,35 @@
   }
   const canZip = typeof CompressionStream !== 'undefined';
 
-  function pack(s) {
+  const CUT = { name: 60, addr: 80, note: 200 };
+  const hasStay = s => s.waypoints.some(w => w.night && w.stay && Object.keys(w.stay).length);
+
+  function pack(s, withStay) {
+    const y = {};
+    if (withStay) s.waypoints.forEach((w, i) => {
+      if (!w.night || !w.stay) return;
+      const v = ['name', 'addr', 'note'].map(f => String(w.stay[f] || '').slice(0, CUT[f]));
+      if (v.some(Boolean)) y[i] = v;
+    });
     return {
       v: 1, n: s.name, m: s.mode,
       w: U.encode(s.waypoints.map(w => w.c), 5),
       k: s.waypoints.map(w => (w.locked ? 1 : 0) + (w.gap ? 2 : 0) + (w.night ? 4 : 0)).join(''),
       l: s.legs.map(L => L.kind === 'track'
         ? ['t', U.encode(U.simplify(L.coords, 5), 5), L.name || '']
-        : L.kind === 'line' ? ['l'] : ['r', L.road])
+        : L.kind === 'line' ? ['l'] : ['r', L.road]),
+      ...(Object.keys(y).length ? { y } : {})
     };
   }
 
   function unpack(o) {
     const mode = T.config.modes[o.m] ? o.m : 'moto';
     const cs = U.decode(o.w, 5), lk = String(o.k || '');
-    const waypoints = cs.map((c, i) => { const f = +lk[i] || 0; return { id: U.uid(), c, locked: !!(f & 1), name: null, ...(f & 2 ? { gap: true } : {}), ...(f & 4 ? { night: true } : {}) }; });
+    const waypoints = cs.map((c, i) => {
+      const f = +lk[i] || 0, y = o.y && o.y[i], stay = {};
+      if (y && (f & 4)) ['name', 'addr', 'note'].forEach((k, j) => { if (y[j]) stay[k] = String(y[j]).slice(0, CUT[k]); });
+      return { id: U.uid(), c, locked: !!(f & 1), name: null, ...(f & 2 ? { gap: true } : {}), ...(f & 4 ? { night: true } : {}), ...(Object.keys(stay).length ? { stay } : {}) };
+    });
     const legs = [];
     for (let i = 0; i < waypoints.length - 1; i++) {
       const a = waypoints[i], b = waypoints[i + 1], d = (o.l || [])[i] || ['r'];
@@ -50,8 +64,8 @@
     return { name: String(o.n || 'Parcours partagé').slice(0, 60), mode, waypoints, legs };
   }
 
-  async function encode(s) {
-    const json = new TextEncoder().encode(JSON.stringify(pack(s)));
+  async function encode(s, withStay) {
+    const json = new TextEncoder().encode(JSON.stringify(pack(s, withStay)));
     return canZip ? 'z' + b64u(await pipe(json, new CompressionStream('deflate-raw'))) : 'j' + b64u(json);
   }
   async function decode(str) {
@@ -63,19 +77,26 @@
   async function shareDialog() {
     const s = T.app.st();
     if (s.waypoints.length < 2) { T.ui.toast('Tracez d’abord un parcours', 'error'); return; }
+    const base = location.href.split('#')[0] + PREFIX;
     let url;
-    try { url = location.href.split('#')[0] + PREFIX + await encode(s); }
+    try { url = base + await encode(s, false); }
     catch (e) { T.ui.toast('Impossible de créer le lien', 'error'); return; }
     const long = url.length > 8000;
     const local = location.protocol === 'file:';
     const root = T.ui.modal({
       title: 'Partager le parcours',
       body: `<p class="muted">Ce lien contient tout le parcours : aucun compte ni serveur. La personne qui l’ouvre le retrouve tel quel et peut le modifier de son côté.</p>
+        ${hasStay(s) ? '<label class="chk"><input type="checkbox" id="sh-stay"> Inclure les fiches des nuits (établissement, adresse, notes)<small>Visibles par toute personne qui a le lien. Textes raccourcis pour garder un lien raisonnable.</small></label>' : ''}
         <textarea id="sh-url" rows="3" readonly>${U.esc(url)}</textarea>
         ${long ? `<p class="muted small">Lien long (${U.nf(url.length)} caractères) à cause des tracés importés : certaines messageries peuvent le couper. L’e-mail fonctionne toujours.</p>` : ''}
         ${local ? '<p class="err">Le site est ouvert depuis un fichier de votre PC : le lien ne fonctionnera qu’une fois le site en ligne.</p>' : ''}
         <div class="sh-a"><button class="btn btn-primary" data-copy>${I('link')}Copier le lien</button>
         ${navigator.share ? `<button class="btn" data-share>${I('upload')}Envoyer…</button>` : ''}</div>`
+    });
+    const cb = root.querySelector('#sh-stay');
+    if (cb) cb.addEventListener('change', async () => {
+      try { url = base + await encode(s, cb.checked); root.querySelector('#sh-url').value = url; }
+      catch (e) { T.ui.toast('Impossible de créer le lien', 'error'); }
     });
     root.querySelector('[data-copy]').addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(url); T.ui.toast('Lien copié'); }

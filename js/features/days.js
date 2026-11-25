@@ -157,6 +157,7 @@
         <button class="day-h" data-act="dayFocus" data-i="${d.i}"><b>Jour ${d.i + 1}</b><span>${U.esc(label(s, d.from))}<i>→</i>${U.esc(label(s, d.to))}</span></button>
         <div class="day-time">${dayTime(d)}</div>
         ${dayWx(d)}
+        ${d.i < D.length - 1 && d.to.wi >= 0 && s.waypoints[d.to.wi].stay && s.waypoints[d.to.wi].stay.name ? `<p class="day-stay">${I('bed', 'sm')} Nuit : <b>${U.esc(s.waypoints[d.to.wi].stay.name)}</b></p>` : ''}
         <div class="day-figs"><span>${U.fmtKm(d.dist)}</span><span>${U.fmtDur(d.dur + d.pause)}${d.pause ? ` <small>dont ${U.fmtDur(d.pause)} de pause</small>` : ''}</span><span>+${U.nf(d.up)} m</span></div>
         <div class="day-a">${d.i < D.length - 1 ? `<button class="mini" data-act="daySleep" data-i="${d.i}">${I('bed', 'sm')}Dormir ici${n ? ` <b>${n}</b>` : ''}</button>` : ''}<button class="mini" data-act="dayGpx" data-i="${d.i}">${I('upload', 'sm')}GPX du jour</button></div></li>`;
     }).join('')}</ol>${D[0].auto ? '<p class="muted small">Découpage proposé automatiquement (réglage). Marquez une étape « Nuit » pour choisir vous-même où dormir.</p>' : ''}`;

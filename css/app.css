@@ -469,3 +469,9 @@ textarea { resize: vertical; font-family: var(--num); }
 .day-wx { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: 14px; }
 .day-wx .wx-ic { width: 22px; height: 22px; }
 .day-wx .hi { color: #1c7ed6; font-weight: 600; }
+
+.stay { display: grid; gap: 6px; margin-top: 10px; min-width: 240px; }
+.stay label { display: grid; gap: 3px; font: 600 13px var(--num); color: var(--muted); }
+.stay input, .stay textarea { width: 100%; font: 400 15px system-ui, sans-serif; color: var(--ink); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); min-height: 38px; }
+.day-stay { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.day-stay b { color: var(--ink); }
