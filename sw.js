@@ -1,5 +1,5 @@
 /* Service worker : l'application s'ouvre même hors connexion (la carte et les calculs, eux, ont besoin d'Internet). */
-const CACHE = 'jeevay-v1.7.8';
+const CACHE = 'jeevay-v1.7.9';
 const SHELL = [
   './',
   'index.html',

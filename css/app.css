@@ -106,6 +106,7 @@ button { cursor: pointer; }
   background: repeating-conic-gradient(#14161b 0 25%, #3a3e47 0 50%) 0 0 / 10px 10px;
 }
 .wp-locked { border-radius: 8px; cursor: pointer; }
+.wp-gap { width: 10px; height: 10px; border-width: 2px; font-size: 0; opacity: .8; }
 
 /* ---------- Panneau ---------- */
 .panel {

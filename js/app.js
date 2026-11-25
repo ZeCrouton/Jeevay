@@ -126,16 +126,31 @@
     });
   }
 
-  function addItems(items, { replace, connect }) {
+  // Coupures du signal GPS : écart anormal entre deux points d'un tracé enregistré
+  const GAP = 1200;
+  function splitGaps(coords) {
+    const out = [[coords[0]]];
+    for (let i = 1; i < coords.length; i++) {
+      if (U.dist(coords[i - 1], coords[i]) > GAP) out.push([coords[i - 1]]);
+      out[out.length - 1].push(coords[i]);
+    }
+    // le morceau commencé par le point d'avant la coupure démarre en fait au point suivant
+    return out.map((p, k) => k ? p.slice(1) : p).filter(p => p.length > 1);
+  }
+  const countGaps = c => { let n = 0; for (let i = 1; i < c.length; i++) if (U.dist(c[i - 1], c[i]) > GAP) n++; return n; };
+
+  function addItems(items, { replace, connect, fill }) {
     if (guard()) return;
     S.commit(s => {
       if (replace) { s.waypoints = []; s.legs = []; }
       for (const it of items) {
-        const coords = it.reversed ? it.coords.slice().reverse() : it.coords;
+        const all = it.reversed ? it.coords.slice().reverse() : it.coords;
         if (it.type === 'points') {
-          coords.forEach(c => s.waypoints.push({ id: U.uid(), c }));
+          all.forEach(c => s.waypoints.push({ id: U.uid(), c }));
           continue;
         }
+        const parts = fill ? splitGaps(all) : [all];
+        parts.forEach((coords, pk) => {
         const start = coords[0], end = coords[coords.length - 1];
         const last = s.waypoints[s.waypoints.length - 1];
         let a;
@@ -144,16 +159,18 @@
           a = last;
           if (!last.locked) { last.c = start; last.locked = true; }
         } else {
-          a = { id: U.uid(), c: start, locked: true };
+          a = { id: U.uid(), c: start, locked: true, gap: pk > 0 || undefined };
           s.waypoints.push(a);
-          if (!connect) s.legs.push(E.makeLeg(last, a, s, 'line'));
+          if (pk > 0) s.legs.push(E.makeLeg(last, a, s, null));          // coupure GPS : comblée par la route
+          else if (!connect) s.legs.push(E.makeLeg(last, a, s, 'line'));
         }
-        const b = { id: U.uid(), c: end, locked: true, name: null };
+        const b = { id: U.uid(), c: end, locked: true, name: null, gap: pk < parts.length - 1 || undefined };
         s.waypoints.push(b);
         s.legs.push({ ...E.makeLeg(a, b, s, null), kind: 'track', road: null, name: it.name, coords: [a.c].concat(coords.slice(1, -1), [b.c]) });
+        });
       }
     });
-    st().waypoints.forEach(w => { if (!w.name) nameLater(w.id); });
+    st().waypoints.forEach(w => { if (!w.name && !w.gap) nameLater(w.id); });
     setTimeout(fitAll, 50);
   }
 
@@ -417,13 +434,14 @@
         ${dups ? `<p class="muted small">${dups > 1 ? `${dups} itinéraires prévus ont été décochés` : 'Un itinéraire prévu a été décoché'} : ils doublent les tracés enregistrés du même fichier.</p>` : ''}
         <ul class="imp">${items.map((it, k) => `<li>
           <label class="chk"><input type="checkbox" data-k="${k}" ${it.off ? '' : 'checked'}>
-          <span><b>${U.esc(it.name)}</b><small>${it.type === 'points' ? `${it.coords.length} points de passage (recalculé)` : `Tracé fixe · ${U.nf(it.km, 1)} km`} · ${U.esc(it.file)}${it.reversed ? ' · inversé' : ''}</small></span></label>
+          <span><b>${U.esc(it.name)}</b><small>${it.type === 'points' ? `${it.coords.length} points de passage (recalculé)` : `Tracé fixe · ${U.nf(it.km, 1)} km${(it.gaps = it.gaps ?? countGaps(it.coords)) ? ` · ${it.gaps} coupure${it.gaps > 1 ? 's' : ''} GPS` : ''}`} · ${U.esc(it.file)}${it.reversed ? ' · inversé' : ''}</small></span></label>
           <span class="imp-b">
             <button class="icon-btn" data-up="${k}" ${k === 0 ? 'disabled' : ''} aria-label="Monter">${I('up')}</button>
             <button class="icon-btn" data-dn="${k}" ${k === items.length - 1 ? 'disabled' : ''} aria-label="Descendre">${I('down')}</button>
             <button class="icon-btn" data-rv="${k}" aria-label="Inverser le sens">${I('swap')}</button>
           </span></li>`).join('')}</ul>
         <button class="btn btn-sm" data-more="1">${I('plus')}Ajouter un autre fichier</button>
+        <label class="chk"><input type="checkbox" id="imp-fill" ${T.settings.get().fillGaps !== false ? 'checked' : ''}> Combler les coupures du signal GPS par la route (sinon en ligne droite)</label>
         <label class="chk"><input type="checkbox" id="imp-connect" ${T.settings.get().autoConnect ? 'checked' : ''}> Relier les tracés entre eux par la route (sinon en ligne droite)</label>
         ${hasRoute ? '<label class="chk"><input type="checkbox" id="imp-replace"> Remplacer le parcours actuel (sinon, ajout à la fin)</label>' : ''}`;
     };
@@ -459,8 +477,9 @@
           const pick = items.filter(i => !i.off);
           if (!pick.length) { UI.toast('Aucun tracé sélectionné', 'error'); return false; }
           const connect = $('#imp-connect', root).checked, rep = $('#imp-replace', root);
-          T.settings.set({ autoConnect: connect });
-          addItems(pick, { replace: rep ? rep.checked : false, connect });
+          const fill = $('#imp-fill', root).checked;
+          T.settings.set({ autoConnect: connect, fillGaps: fill });
+          addItems(pick, { replace: rep ? rep.checked : false, connect, fill });
           UI.toast(`${pick.length} élément${pick.length > 1 ? 's' : ''} importé${pick.length > 1 ? 's' : ''}`);
         }
       }]

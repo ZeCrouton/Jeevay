@@ -103,6 +103,7 @@ T.map = (() => {
     const ids = new Set(wps.map(w => w.id));
     for (const [id, m] of markers) if (!ids.has(id)) { m.remove(); markers.delete(id); }
     const n = wps.length;
+    let num = 0;   // les points de reprise après une coupure GPS ne sont pas numérotés
     wps.forEach((w, i) => {
       let m = markers.get(w.id);
       if (!m) {
@@ -121,9 +122,11 @@ T.map = (() => {
       }
       const el = m.getElement().firstChild;
       const kind = n === 1 ? 'start' : i === 0 ? 'start' : i === n - 1 ? 'end' : 'mid';
-      el.className = `wp wp-${kind}${w.locked ? ' wp-locked' : ''}`;
-      el.textContent = i === 0 ? 'D' : i === n - 1 ? 'A' : String(i);
-      el.title = (w.name ? w.name + ' — ' : '') + (w.locked ? 'extrémité d’un tracé importé' : 'glisser pour déplacer');
+      const gap = w.gap && kind === 'mid';
+      if (kind === 'mid' && !gap) num++;
+      el.className = `wp wp-${kind}${w.locked ? ' wp-locked' : ''}${gap ? ' wp-gap' : ''}`;
+      el.textContent = i === 0 ? 'D' : i === n - 1 ? 'A' : gap ? '' : String(num);
+      el.title = gap ? 'Coupure du signal GPS, comblée par la route' : (w.name ? w.name + ' — ' : '') + (w.locked ? 'extrémité d’un tracé importé' : 'glisser pour déplacer');
       m.setDraggable(!w.locked && !(h.isLocked && h.isLocked()));
       const p = m.getLngLat();
       if (Math.abs(p.lng - w.c[0]) > 1e-9 || Math.abs(p.lat - w.c[1]) > 1e-9) m.setLngLat(w.c);
