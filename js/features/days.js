@@ -130,6 +130,7 @@
   const day2 = dt => dt.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
   function dayTime(d) {
     const hm = W().hm;
+    if (d.i === 0) return `<span>départ <input type="datetime-local" class="time-in" data-dep1 value="${W().toInput(d.start)}" aria-label="Date et heure de départ du jour 1"></span><span>arrivée ${hm(d.end)}</span>`;
     const val = `${String(d.start.getHours()).padStart(2, '0')}:${String(d.start.getMinutes()).padStart(2, '0')}`;
     const startTxt = d.i > 0 && d.nightW
       ? `départ <input type="time" class="time-in" data-dep="${d.nightW.id}" value="${val}" aria-label="Heure de départ du jour ${d.i + 1}">`
@@ -161,6 +162,9 @@
     const el = document.getElementById('days');
     if (!el) return;
     const D = cur = days(s, comb);
+    // Saisie d'une heure en cours : on ne remplace pas le champ sous les doigts
+    const a = document.activeElement;
+    if (D.length > 1 && a && a.tagName === 'INPUT' && el.contains(a)) { skipped = true; return; }
     if (D.length < 2) { el.innerHTML = ''; return; }
     el.innerHTML = `<h3>Jours <span class="cnt">${D.length}</span></h3><ol class="days">${D.map(d => {
       const n = d.i < D.length - 1 ? sleepNear(d.i) : 0;
@@ -175,8 +179,23 @@
     }).join('')}</ol>${D[0].auto ? '<p class="muted small">Découpage proposé automatiquement (réglage). Marquez une étape « Nuit » pour choisir vous-même où dormir.</p>' : ''}`;
   });
 
-  // Heure de départ d'une journée (sur l'étape « Nuit » de la veille)
+  let skipped = false;
+  document.addEventListener('focusout', e => {
+    if (skipped && e.target.closest && e.target.closest('#days')) setTimeout(() => { skipped = false; T.app.render(); }, 200);
+  });
+
+  // Sur écran tactile, la saisie est finie dès que le sélecteur est validé : on libère le champ pour rafraîchir
   document.addEventListener('change', e => {
+    if (e.target.closest && e.target.closest('#days') && window.matchMedia('(pointer: coarse)').matches) e.target.blur();
+  });
+
+  // Heure de départ d'une journée (jour 1 : départ général ; ensuite : sur l'étape « Nuit » de la veille)
+  document.addEventListener('change', e => {
+    if (e.target && e.target.dataset && 'dep1' in e.target.dataset) {
+      const d = new Date(e.target.value);
+      if (!isNaN(d) && d >= new Date().setHours(0, 0, 0, 0)) { W().setDeparture(d); T.app.render(); }
+      return;
+    }
     const id = e.target && e.target.dataset && e.target.dataset.dep;
     if (!id || !/^\d{1,2}:\d{2}$/.test(e.target.value)) return;
     T.app.S.commit(x => { x.waypoints = x.waypoints.map(p => p.id === id ? { ...p, dep: e.target.value } : p); }, true);

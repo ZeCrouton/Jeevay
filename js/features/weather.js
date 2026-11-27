@@ -6,7 +6,8 @@
 
   const nextHour = () => { const d = new Date(); d.setMinutes(0, 0, 0); d.setHours(d.getHours() + 1); return d; };
   function departure() {
-    try { const v = localStorage.getItem(KEY); if (v && +v > Date.now() - 3600e3) return new Date(+v); } catch (e) { /* ignore */ }
+    // L'heure choisie est gardée même si elle est passée, tant que la date n'est pas antérieure à aujourd'hui
+    try { const v = localStorage.getItem(KEY); if (v && +v >= new Date().setHours(0, 0, 0, 0)) return new Date(+v); } catch (e) { /* ignore */ }
     return nextHour();
   }
   const setDeparture = d => { try { localStorage.setItem(KEY, String(d.getTime())); } catch (e) { /* ignore */ } };
@@ -132,5 +133,5 @@
 
   T.hooks.act.wxLoad = load;
   const fresh = s => !!data.sig && data.sig === sigOf(s, departure());
-  T.weather = { departure, timeAt, hm, icon, fresh, get data() { return data; } };
+  T.weather = { departure, setDeparture, toInput, timeAt, hm, icon, fresh, get data() { return data; } };
 })();
