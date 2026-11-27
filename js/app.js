@@ -587,11 +587,25 @@
     UI.toast(`${pts.length} étapes importées${parsed.vias ? ` (dont ${parsed.vias} points de passage)` : ''}`);
   }
 
+  // Google Maps : 3 points intermédiaires par lien sur mobile (limite des navigateurs mobiles), 9 ailleurs
+  function openGmaps() {
+    const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const parts = T.io.export.googleMapsParts(st(), mobile ? 3 : 9);
+    if (!parts.length) { UI.toast('Tracez d’abord un parcours', 'error'); return; }
+    if (parts.length === 1) { window.open(parts[0].url, '_blank', 'noopener'); return; }
+    const km = d => U.nf(d / 1000);
+    UI.modal({
+      title: 'Ouvrir dans Google Maps',
+      body: `<p class="muted">Pour suivre au mieux votre tracé, il est découpé en ${parts.length} parties : ouvrez-les l’une après l’autre.</p>
+        <div class="gm-parts">${parts.map((p, k) => `<a class="btn" href="${U.esc(p.url)}" target="_blank" rel="noopener"><b>Partie ${k + 1}</b><span>km ${km(p.from)} → ${km(p.to)}</span></a>`).join('')}</div>
+        <p class="muted small">Google recalcule la route entre les points : de petits écarts restent possibles. Pour le tracé exact, exportez le GPX.</p>`
+    });
+  }
+
   function exportDialog() {
     const s = st();
     if (!A.combine(s).coords.length) { UI.toast('Rien à exporter pour le moment', 'error'); return; }
     if (s.legs.some(l => l.status === 'pending')) UI.toast('Des tronçons sont encore en calcul : ils ne seront pas inclus');
-    const gm = T.io.export.googleMapsUrl(s);
     const D = T.days ? T.days.days(s) : [], nd = D.length;
     UI.modal({
       title: 'Exporter le parcours',
@@ -604,7 +618,7 @@
         </fieldset>
         <label class="chk"><input type="checkbox" id="ex-wpt" checked> Inclure les étapes comme points d’intérêt</label>
         ${nd > 1 ? `<label class="chk"><input type="checkbox" id="ex-days"> Un fichier par jour (${nd} fichiers)</label>` : ''}
-        ${gm ? `<p class="muted small">Autre option : <a href="${gm}" target="_blank" rel="noopener">ouvrir dans Google Maps</a> (approximatif, Google recalcule à sa façon).</p>` : ''}`,
+        <p class="muted small">Autre option : <button type="button" class="mini" data-act="openGmaps">Ouvrir dans Google Maps</button> (approximatif, Google recalcule à sa façon).</p>`,
       actions: [{ label: 'Annuler' }, {
         label: 'Télécharger le GPX', primary: true, onClick: root => {
           const k = root.querySelector('input[name="ex-k"]:checked').value;
@@ -833,11 +847,7 @@
       case 'reverse': reverse(); break;
       case 'clear': clearAll(); break;
       case 'more': moreMenu(el); break;
-      case 'openGmaps': {
-        const u = T.io.export.googleMapsUrl(st());
-        if (u) window.open(u, '_blank', 'noopener'); else UI.toast('Tracez d’abord un parcours', 'error');
-        break;
-      }
+      case 'openGmaps': openGmaps(); break;
       case 'road': askRoad(i); break;
       case 'retry': E.retry(st().legs[i].id); break;
       case 'focus': {
