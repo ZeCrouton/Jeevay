@@ -587,11 +587,12 @@
     UI.toast(`${pts.length} étapes importées${parsed.vias ? ` (dont ${parsed.vias} points de passage)` : ''}`);
   }
 
-  // Google Maps : 3 points intermédiaires par lien sur mobile (limite des navigateurs mobiles), 9 ailleurs
+  // Google Maps : 9 points intermédiaires par lien. Sans découpage en journées, 3 sur mobile (limite des navigateurs
+  // mobiles) ; un lien par journée en garde 9, pour l'application Google Maps
   function openGmaps() {
     const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     const D = T.days ? T.days.days(st()) : [], byDay = D.length > 1;
-    const parts = T.io.export.googleMapsParts(st(), mobile ? 3 : 9, D);
+    const parts = T.io.export.googleMapsParts(st(), mobile && !byDay ? 3 : 9, D);
     if (!parts.length) { UI.toast('Tracez d’abord un parcours', 'error'); return; }
     if (parts.length === 1) { window.open(parts[0].url, '_blank', 'noopener'); return; }
     const km = d => U.nf(d / 1000);
@@ -599,6 +600,7 @@
       title: 'Ouvrir dans Google Maps',
       body: `<p class="muted">${byDay ? `Un lien par journée (${parts.length} jours).` : `Pour suivre au mieux votre tracé, il est découpé en ${parts.length} parties : ouvrez-les l’une après l’autre.`}</p>
         <div class="gm-parts">${parts.map((p, k) => `<a class="btn" href="${U.esc(p.url)}" target="_blank" rel="noopener"><b>${p.day ? `Jour ${p.day}` : `Partie ${k + 1}`}</b><span>km ${km(p.from)} → ${km(p.to)}</span></a>`).join('')}</div>
+        ${mobile && byDay ? '<p class="muted small">Sur mobile, ouvrez les liens dans l’application Google Maps : un navigateur peut ignorer des points.</p>' : ''}
         <p class="muted small">Google recalcule la route entre les points : de petits écarts restent possibles. Pour le tracé exact, exportez le GPX.</p>`
     });
   }
