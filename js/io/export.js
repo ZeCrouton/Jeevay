@@ -99,28 +99,47 @@ T.io.export = (() => {
      Pour suivre au mieux le tracé : points aux étapes et là où il s'écarte le plus de la ligne droite,
      répartis en autant de liens (« parties ») que nécessaire. */
   const MAXPARTS = 12;
+  // Point du tracé (entre les distances a et b) le plus éloigné de la droite qui les relie
+  function farthest(comb, a, b) {
+    const p = U.at(comb.coords, comb.cum, a), q = U.at(comb.coords, comb.cum, b);
+    const kx = Math.cos(p[1] * Math.PI / 180) * 111320, ky = 110540;
+    const vx = (q[0] - p[0]) * kx, vy = (q[1] - p[1]) * ky, len = vx * vx + vy * vy;
+    let best = { off: 0, d: null };
+    comb.coords.forEach((c, k) => {
+      const d = comb.cum[k];
+      if (d < a + 500 || d > b - 500) return;
+      const x = (c[0] - p[0]) * kx, y = (c[1] - p[1]) * ky;
+      const t = len ? U.clamp((x * vx + y * vy) / len, 0, 1) : 0, off = Math.hypot(x - t * vx, y - t * vy);
+      if (off > best.off) best = { off, d };
+    });
+    return best;
+  }
+  // Un seul lien pour la portion [a, b] (une journée) : ses étapes, puis les plus grands détours, maxVia points au plus
+  function dayDistances(comb, fixed, a, b, maxVia) {
+    let via = fixed.filter(d => d > a + 300 && d < b - 300);
+    if (via.length > maxVia) via = thin(via, maxVia);
+    const ds = [a, ...via, b].sort((x, y) => x - y);
+    while (ds.length < maxVia + 2) {
+      let best = { off: 100, d: null }, wide = 1;
+      for (let k = 1; k < ds.length; k++) {
+        const f = farthest(comb, ds[k - 1], ds[k]);
+        if (f.off > best.off) best = f;
+        if (ds[k] - ds[k - 1] > ds[wide] - ds[wide - 1]) wide = k;
+      }
+      // Plus aucun détour marqué : on resserre le plus long intervalle
+      if (best.d == null) { if (ds[wide] - ds[wide - 1] < 2000) break; best.d = (ds[wide] + ds[wide - 1]) / 2; }
+      ds.push(best.d); ds.sort((x, y) => x - y);
+    }
+    return ds;
+  }
+
   // Distances (m) des points transmis. fixed : étapes à reprendre ; tol : écart toléré ; gap : espacement maximal
   function keyDistances(comb, fixed, tol, gap) {
     const base = [0, ...fixed.filter(d => d > 300 && d < comb.total - 300), comb.total]
       .sort((a, b) => a - b).filter((d, k, a) => !k || d - a[k - 1] > 300 || d === comb.total);
     const out = [0];
-    // Point du tracé (entre les distances a et b) le plus éloigné de la droite qui les relie
-    const farthest = (a, b) => {
-      const p = U.at(comb.coords, comb.cum, a), q = U.at(comb.coords, comb.cum, b);
-      const kx = Math.cos(p[1] * Math.PI / 180) * 111320, ky = 110540;
-      const vx = (q[0] - p[0]) * kx, vy = (q[1] - p[1]) * ky, len = vx * vx + vy * vy;
-      let best = { off: 0, d: null };
-      comb.coords.forEach((c, k) => {
-        const d = comb.cum[k];
-        if (d < a + 500 || d > b - 500) return;
-        const x = (c[0] - p[0]) * kx, y = (c[1] - p[1]) * ky;
-        const t = len ? U.clamp((x * vx + y * vy) / len, 0, 1) : 0, off = Math.hypot(x - t * vx, y - t * vy);
-        if (off > best.off) best = { off, d };
-      });
-      return best;
-    };
     const split = (a, b, depth) => {
-      const f = depth < 12 ? farthest(a, b) : { off: 0, d: null };
+      const f = depth < 12 ? farthest(comb, a, b) : { off: 0, d: null };
       const m = f.d != null && f.off > tol ? f.d : b - a > gap ? (a + b) / 2 : null;
       if (m == null) { out.push(b); return; }
       split(a, m, depth + 1); split(m, b, depth + 1);
@@ -129,27 +148,34 @@ T.io.export = (() => {
     return out;
   }
 
-  // Liens Google Maps successifs [{ url, from, to }] (distances en m) ; maxVia : points intermédiaires par lien
-  function googleMapsParts(state, maxVia) {
+  // Liens Google Maps successifs [{ url, from, to, day }] (distances en m) ; maxVia : points intermédiaires par lien
+  // days (facultatif) : journées [{ a, b }] ; il y a alors un seul lien par journée
+  function googleMapsParts(state, maxVia, days) {
     const comb = A.combine(state), n = state.waypoints.length;
     if (comb.coords.length < 2) return [];
     const fixed = state.waypoints.map((w, i) => ({ w, i })).filter(({ w, i }) => i > 0 && i < n - 1 && !w.gap)
       .map(({ i }) => comb.starts[i]);
     const size = maxVia + 1;
-    let tol = 700, gap = 25000, ds = keyDistances(comb, fixed, tol, gap);
-    // Trop de parties : on tolère des écarts plus grands (les étapes, elles, sont toujours gardées)
-    for (let k = 0; k < 10 && ds.length - 1 > size * MAXPARTS; k++) { tol *= 1.5; gap *= 1.5; ds = keyDistances(comb, fixed, tol, gap); }
     const f = d => { const c = U.at(comb.coords, comb.cum, d); return c[1].toFixed(5) + ',' + c[0].toFixed(5); };
     const mode = { moto: 'driving', velo: 'bicycling', run: 'walking' }[state.mode];
+    let groups;
+    if (days && days.length > 1) groups = days.map(d => dayDistances(comb, fixed, d.a, d.b, maxVia));
+    else {
+      let tol = 700, gap = 25000, ds = keyDistances(comb, fixed, tol, gap);
+      // Trop de parties : on tolère des écarts plus grands (les étapes, elles, sont toujours gardées)
+      for (let k = 0; k < 10 && ds.length - 1 > size * MAXPARTS; k++) { tol *= 1.5; gap *= 1.5; ds = keyDistances(comb, fixed, tol, gap); }
+      groups = [];
+      for (let k = 0; k < ds.length - 1; k += size) groups.push(ds.slice(k, k + size + 1));
+    }
     const parts = [];
-    for (let k = 0; k < ds.length - 1; k += size) {
-      const p = ds.slice(k, k + size + 1), via = p.slice(1, -1);
+    groups.forEach((p, k) => {
+      const via = p.slice(1, -1);
       parts.push({
-        from: p[0], to: p[p.length - 1],
+        from: p[0], to: p[p.length - 1], day: days && days.length > 1 ? k + 1 : null,
         url: 'https://www.google.com/maps/dir/?api=1&origin=' + f(p[0]) + '&destination=' + f(p[p.length - 1]) +
           (via.length ? '&waypoints=' + encodeURIComponent(via.map(f).join('|')) : '') + '&travelmode=' + mode
       });
-    }
+    });
     return parts;
   }
 
