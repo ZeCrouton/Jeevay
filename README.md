@@ -18,4 +18,4 @@ Crée tes itinéraires sur une carte, vois le dénivelé et les difficultés, ex
 Tes parcours restent dans ton navigateur.
 
 ## Données et crédits
-Carte OpenFreeMap (© OpenMapTiles, © contributeurs OpenStreetMap) · itinéraires Valhalla (FOSSGIS) · météo Open-Meteo · recherche de lieux Photon (Komoot) · lieux d'intérêt : © contributeurs OpenStreetMap, licence ODbL.
+Carte OpenFreeMap (© OpenMapTiles, © contributeurs OpenStreetMap) · itinéraires Valhalla (FOSSGIS) · météo Open-Meteo · recherche de lieux Photon (Komoot) et d’adresses Base Adresse Nationale (IGN) · lieux d'intérêt : © contributeurs OpenStreetMap, licence ODbL.

@@ -5,7 +5,7 @@ window.T = window.T || {};
 
 T.config = {
   appName: 'Jeevay',
-  version: '1.15.0',
+  version: '1.15.1',
   storagePrefix: 'trajecto.',
 
   map: {
@@ -30,8 +30,8 @@ T.config = {
   // Altitudes (Open-Meteo, gratuit, sans clé)
   // Altitudes : tuiles de relief ouvertes (AWS Terrain Tiles), sans clé ni quota
   elevation: { url: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png', zoom: 12 },
-  // Recherche de lieux (Photon / Komoot, gratuit, sans clé)
-  geocode: { url: 'https://photon.komoot.io', fallback: 'https://nominatim.openstreetmap.org' },
+  // Recherche de lieux (Photon / Komoot) et d'adresses françaises (Base Adresse Nationale, IGN) : gratuits, sans clé
+  geocode: { url: 'https://photon.komoot.io', fallback: 'https://nominatim.openstreetmap.org', ban: 'https://data.geopf.fr/geocodage' },
 
   // Points d'intérêt : base OpenStreetMap préparée chaque mois (branche poi-data), miroir CDN en secours
   // Synchronisation par code : Cloudflare Worker gratuit (dossier worker/)

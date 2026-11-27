@@ -701,7 +701,7 @@
         </fieldset>
         <fieldset class="radios"><legend>Couleur de l’appli</legend><div class="swatches">${[['auto', 'Automatique : une couleur par activité'], ...T.config.palette].map(([c, n]) => `<label title="${U.esc(n)}"><input type="radio" name="set-accent" value="${c}" aria-label="${U.esc(n)}" ${(s.accent || 'auto') === c ? 'checked' : ''}><i style="--c:${c === 'auto' ? '#ff4d00' : c}" class="${c === 'auto' ? 'sw-auto' : ''}"></i></label>`).join('')}</div></fieldset>
         <label class="field"><span>Fond de carte</span><select id="set-style">${T.config.map.styles.map(x => `<option value="${x.id}" ${x.id === s.mapStyle ? 'selected' : ''}>${x.label}</option>`).join('')}</select></label>
-        <p class="muted small">Tout fonctionne gratuitement avec des services ouverts (OpenStreetMap, Valhalla, Open-Meteo, Photon). Vos parcours restent dans votre navigateur. Version ${T.config.version}.</p>`,
+        <p class="muted small">Tout fonctionne gratuitement avec des services ouverts (OpenStreetMap, Valhalla, Open-Meteo, Photon, Base Adresse Nationale). Vos parcours restent dans votre navigateur. Version ${T.config.version}.</p>`,
       actions: [{ label: 'Annuler' }, {
         label: 'Enregistrer', primary: true, onClick: root => {
           const m = $('#set-pace', root).value.trim().match(/^(\d{1,2})(?:[:.,h'](\d{1,2}))?$/);
