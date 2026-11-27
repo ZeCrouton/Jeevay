@@ -795,9 +795,14 @@
       ['Panneau du parcours', [['download', 'Importer', 'Ouvre un fichier GPX pour le charger sur la carte.'], ['link', 'Partager', 'Crée un lien vers votre parcours.'],
         ['upload', 'Exporter GPX', 'Enregistre le parcours en fichier GPX pour votre GPS ou votre montre.'], ['route', 'Point de passage', 'Touchez un point puis « Point de passage » : il impose la route sans être une étape.'], ['bed', 'Nuit', 'Touchez une étape puis « Nuit ici » : le parcours est découpé en journées (distance, durée et GPX par jour, hébergements autour de la nuit).'], ['more', 'Plus d’options', 'Mes parcours, boucle, road-book, inverser le sens, Google Maps, réglages, tout effacer.'], ['link', 'Retrouver mes parcours (code)', 'Crée un code personnel pour retrouver vos parcours enregistrés sur un autre appareil. Gardez-le secret : il donne accès à vos parcours.']]]
     ];
+    const install = [
+      ['iPhone / iPad', ['Ouvrez Jeevay dans <b>Safari</b>.', 'Touchez le bouton <b>Partager</b> (carré avec une flèche vers le haut) ; s’il n’est pas visible, ouvrez d’abord le menu <b>⋯</b>.', 'Choisissez <b>Sur l’écran d’accueil</b> (faites défiler la liste si besoin).', 'Touchez <b>Ajouter</b>.']],
+      ['Android', ['Ouvrez Jeevay dans <b>Chrome</b>.', 'Touchez le menu <b>⋮</b> en haut à droite.', 'Choisissez <b>Ajouter à l’écran d’accueil</b> ou <b>Installer l’application</b>.', 'Confirmez avec <b>Installer</b> ou <b>Ajouter</b>.']]
+    ];
+    const installHtml = `<h3 class="help-h">Installer sur votre smartphone</h3><p class="help-p">Gratuit et sans boutique d’applications : une icône Jeevay est ajoutée à l’écran d’accueil.</p>${install.map(([n, steps]) => `<details class="help-inst"><summary>${n}</summary><ol>${steps.map(x => `<li>${x}</li>`).join('')}</ol></details>`).join('')}`;
     UI.modal({
-      title: 'À quoi servent les boutons ?', wide: true,
-      body: rows.map(([h, items]) => `<h3 class="help-h">${h}</h3><ul class="help-list">${items.map(([ic, n, d]) => `<li><span class="help-ic">${I(ic)}</span><div><b>${n}</b><span>${d}</span></div></li>`).join('')}</ul>`).join(''),
+      title: 'Aide', wide: true,
+      body: installHtml + '<h3 class="help-h">À quoi servent les boutons ?</h3>' + rows.map(([h, items]) => `<h3 class="help-h">${h}</h3><ul class="help-list">${items.map(([ic, n, d]) => `<li><span class="help-ic">${I(ic)}</span><div><b>${n}</b><span>${d}</span></div></li>`).join('')}</ul>`).join(''),
       actions: [{ label: 'Compris', primary: true }]
     });
   }

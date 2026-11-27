@@ -401,6 +401,10 @@ textarea { resize: vertical; font-family: var(--num); }
 /* Aide */
 .help-h { margin: 14px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .help-h:first-child { margin-top: 0; }
+.help-p { margin: 0 0 8px; font-size: 14px; color: var(--muted); }
+.help-inst { background: var(--panel-2); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.help-inst summary { cursor: pointer; font-weight: 700; }
+.help-inst ol { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 4px; font-size: 14px; }
 .help-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .help-list li { display: flex; gap: 12px; align-items: flex-start; }
 .help-ic { flex: 0 0 36px; height: 36px; border-radius: 10px; background: var(--panel-2); display: grid; place-items: center; }
