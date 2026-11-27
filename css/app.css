@@ -363,8 +363,12 @@ textarea { resize: vertical; font-family: var(--num); }
   .modes { height: 44px; width: 100%; }
   .modes button { flex: 1; justify-content: center; }
   .modes button span { display: inline; }
-  .tools { left: auto; right: 12px; top: calc(max(12px, env(safe-area-inset-top)) + 106px); }
-  .tool { width: 42px; height: 42px; }
+  /* La barre d'outils s'arrête au-dessus du panneau replié : les boutons se resserrent si l'écran est court */
+  .tools {
+    left: auto; right: 12px; top: calc(max(12px, env(safe-area-inset-top)) + 106px);
+    max-height: calc(100% - max(12px, env(safe-area-inset-top)) - 106px - var(--peek) - 8px); overflow-y: auto;
+  }
+  .tool { width: 42px; height: auto; flex: 1 1 42px; min-height: 26px; max-height: 42px; }
   .slope-legend { left: auto; right: 62px; top: calc(max(12px, env(safe-area-inset-top)) + 106px); }
   .panel {
     top: auto; left: 0; right: 0; bottom: 0; width: auto; border-radius: 20px 20px 0 0;
