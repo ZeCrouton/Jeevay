@@ -34,7 +34,7 @@
     return {
       v: 1, n: s.name, m: s.mode,
       w: U.encode(s.waypoints.map(w => w.c), 5),
-      k: s.waypoints.map(w => (w.locked ? 1 : 0) + (w.gap ? 2 : 0) + (w.night ? 4 : 0)).join(''),
+      k: s.waypoints.map(w => ((w.locked ? 1 : 0) + (w.gap ? 2 : 0) + (w.night ? 4 : 0) + (w.via ? 8 : 0)).toString(16)).join(''),
       l: s.legs.map(L => L.kind === 'track'
         ? ['t', U.encode(U.simplify(L.coords, 5), 5), L.name || '']
         : L.kind === 'line' ? ['l'] : ['r', L.road]),
@@ -47,9 +47,9 @@
     const mode = T.config.modes[o.m] ? o.m : 'moto';
     const cs = U.decode(o.w, 5), lk = String(o.k || '');
     const waypoints = cs.map((c, i) => {
-      const f = +lk[i] || 0, y = o.y && o.y[i], stay = {};
+      const f = parseInt(lk[i], 16) || 0, y = o.y && o.y[i], stay = {};
       if (y && ((f & 4) || (o.p && +o.p[i] > 0))) ['name', 'addr', 'note'].forEach((k, j) => { if (y[j]) stay[k] = String(y[j]).slice(0, CUT[k]); });
-      return { id: U.uid(), c, locked: !!(f & 1), name: null, ...(f & 2 ? { gap: true } : {}), ...(f & 4 ? { night: true } : {}), ...(o.p && +o.p[i] > 0 ? { pause: Math.min(600, +o.p[i]) } : {}), ...(Object.keys(stay).length ? { stay } : {}) };
+      return { id: U.uid(), c, locked: !!(f & 1), name: null, ...(f & 2 ? { gap: true } : {}), ...(f & 4 ? { night: true } : {}), ...(f & 8 ? { via: true } : {}), ...(o.p && +o.p[i] > 0 ? { pause: Math.min(600, +o.p[i]) } : {}), ...(Object.keys(stay).length ? { stay } : {}) };
     });
     const legs = [];
     for (let i = 0; i < waypoints.length - 1; i++) {

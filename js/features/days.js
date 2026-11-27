@@ -37,7 +37,7 @@
       const d = comb.total * j / k;
       // Une étape proche (moins de 10 % de l'étape du jour) sert de nuit plutôt qu'un point quelconque
       let wi = -1, best = step * 0.1;
-      s.waypoints.forEach((w, i) => { if (i > 0 && i < n - 1 && !w.gap && Math.abs(comb.starts[i] - d) < best) { best = Math.abs(comb.starts[i] - d); wi = i; } });
+      s.waypoints.forEach((w, i) => { if (i > 0 && i < n - 1 && T.io.export.isStep(w, i, n) && Math.abs(comb.starts[i] - d) < best) { best = Math.abs(comb.starts[i] - d); wi = i; } });
       cuts.push(wi >= 0 ? { d: comb.starts[wi], wi } : { d, wi: -1 });
     }
     return { cuts, auto: true };
@@ -154,7 +154,7 @@
     const comb = A.combine(s);
     return s.waypoints.map((w, i) => ({ w, i, p: comb.starts[i] })).filter(x => x.w.pause && x.i > 0 && x.i < s.waypoints.length - 1 && x.p > d.a + 1 && x.p < d.b - 1);
   };
-  const label = (s, m) => m.wi >= 0 ? T.io.export.wpName(s.waypoints[m.wi], m.wi, s.waypoints.length) : `km ${U.nf(m.d / 1000)}`;
+  const label = (s, m) => m.wi >= 0 ? T.io.export.wpName(s.waypoints[m.wi], m.wi, s.waypoints.length, s.waypoints) : `km ${U.nf(m.d / 1000)}`;
   const sleepNear = k => (T.poi && T.poi.data.items || []).filter(it => it.cat === 'sleep' && it.night === k).length;
 
   T.hooks.render.push((s, sum, comb) => {
@@ -168,7 +168,7 @@
         <button class="day-h" data-act="dayFocus" data-i="${d.i}"><b>Jour ${d.i + 1}</b><span>${U.esc(label(s, d.from))}<i>→</i>${U.esc(label(s, d.to))}</span></button>
         <div class="day-time">${dayTime(d)}</div>
         ${dayWx(d)}
-        ${stopsIn(s, d).map(x => `<p class="day-stay">${I('cup', 'sm')} Pause : <b>${U.esc((x.w.stay && x.w.stay.name) || T.io.export.wpName(x.w, x.i, s.waypoints.length))}</b> · ${x.w.pause} min</p>`).join('')}
+        ${stopsIn(s, d).map(x => `<p class="day-stay">${I('cup', 'sm')} Pause : <b>${U.esc((x.w.stay && x.w.stay.name) || T.io.export.wpName(x.w, x.i, s.waypoints.length, s.waypoints))}</b> · ${x.w.pause} min</p>`).join('')}
         ${d.i < D.length - 1 && d.to.wi >= 0 && s.waypoints[d.to.wi].stay && s.waypoints[d.to.wi].stay.name ? `<p class="day-stay">${I('bed', 'sm')} Nuit : <b>${U.esc(s.waypoints[d.to.wi].stay.name)}</b></p>` : ''}
         <div class="day-figs"><span>${U.fmtKm(d.dist)}</span><span>${U.fmtDur(d.dur + d.pause)}${d.pause ? ` <small>dont ${U.fmtDur(d.pause)} de pause</small>` : ''}</span><span>+${U.nf(d.up)} m</span></div>
         <div class="day-a">${d.i < D.length - 1 ? `<button class="mini" data-act="daySleep" data-i="${d.i}">${I('bed', 'sm')}Dormir ici${n ? ` <b>${n}</b>` : ''}</button>` : ''}<button class="mini" data-act="dayGpx" data-i="${d.i}">${I('upload', 'sm')}GPX du jour</button></div></li>`;

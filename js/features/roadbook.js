@@ -25,22 +25,27 @@
   function html(s, sum, comb, mapImg, profImg) {
     const mode = T.config.modes[s.mode], dep = T.weather ? T.weather.departure() : null, hm = T.weather ? T.weather.hm : () => '';
     const sc = s.mode === 'moto' && T.score ? T.score.total(sum) : null;
-    const name = i => T.io.export.wpName(s.waypoints[i], i, s.waypoints.length);
+    const name = i => T.io.export.wpName(s.waypoints[i], i, s.waypoints.length, s.waypoints);
     const atLeg = (d, k) => { const x = multi && T.days.dateAt(s, d, k); return x ? hm(x) : at(d); };
     const at = d => dep ? hm(new Date(dep.getTime() + T.weather.timeAt(s, comb, sum, d) * 1000)) : '';
     const D = T.days ? T.days.days(s) : [], multi = D.length > 1;
     const dayDate = d => d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
     const legDay = i => Math.max(0, D.findIndex(x => comb.starts[i] < x.b - 1));
-    const legRow = (L, i, k) => {
-      const r = T.panel.roadOf(L, s.mode), a = L.an || {}, mm = A.mismatch(L, a, s.mode);
-      const main = a.comp ? Object.entries(a.comp).sort((x, y) => y[1] - x[1])[0] : null;
-      return `<tr><td>${i + 1}</td><td>${U.esc(name(i))} → ${U.esc(name(i + 1))}</td>
-        <td>${U.esc(L.kind === 'track' ? (L.name || r.label) : r.label)}${mm ? '<br><small>surtout ' + U.esc(A.gLabel(mm.main)) + '</small>' : main ? '' : ''}</td>
-        <td class="n">${U.fmtKm(L.distance || 0)}</td><td class="n">${U.nf((comb.starts[i + 1] || 0) / 1000, 1)}</td>
-        <td class="n">${a.hasElev ? '+' + U.nf(a.up) + ' m' : '—'}</td><td class="n">${atLeg(comb.starts[i + 1], k)}</td></tr>`;
+    // Une ligne par trajet d'étape à étape (g : tronçons reliés par des points de passage)
+    const legRow = (g, no, k) => {
+      const i = g[0], end = g[g.length - 1] + 1, Ls = g.map(j => s.legs[j]);
+      const roads = [...new Set(Ls.map(L => { const r = T.panel.roadOf(L, s.mode); return L.kind === 'track' ? (L.name || r.label) : r.label; }))];
+      const mains = [...new Set(Ls.map(L => A.mismatch(L, L.an || {}, s.mode)).filter(Boolean).map(m => A.gLabel(m.main)))];
+      const dist = Ls.reduce((t, L) => t + (L.distance || 0), 0);
+      const hasElev = Ls.every(L => L.an && L.an.hasElev), up = Ls.reduce((t, L) => t + ((L.an && L.an.up) || 0), 0);
+      return `<tr><td>${no + 1}</td><td>${U.esc(name(i))} → ${U.esc(name(end))}</td>
+        <td>${roads.map(U.esc).join(', ')}${mains.length ? '<br><small>surtout ' + mains.map(U.esc).join(', ') + '</small>' : ''}</td>
+        <td class="n">${U.fmtKm(dist)}</td><td class="n">${U.nf((comb.starts[end] || 0) / 1000, 1)}</td>
+        <td class="n">${hasElev ? '+' + U.nf(up) + ' m' : '—'}</td><td class="n">${atLeg(comb.starts[end], k)}</td></tr>`;
     };
+    const legRows = (idx, k) => T.io.export.groups(s.waypoints, idx).map(g => legRow(g, T.io.export.stepNo(s.waypoints, g[0]), k || 0)).join('');
     const head = `<thead><tr><th>#</th><th>Tronçon</th><th>Route</th><th class="n">Distance</th><th class="n">Cumul km</th><th class="n">D+</th><th class="n">${dep ? 'Arrivée' : ''}</th></tr></thead>`;
-    const rows = multi ? '' : s.legs.map((L, i) => legRow(L, i, 0)).join('');
+    const rows = multi ? '' : legRows(s.legs.map((L, i) => i));
     const wxRows = T.weather && T.weather.data.rows.length ? T.weather.data.rows.filter(r => r.w) : [];
     const wxTable = rs => rs.map(r =>
       `<tr><td class="n">${hm(r.t)}</td><td class="n">km ${U.nf(r.d / 1000)}</td><td>${T.providers.weather.kind(r.w.code)[1]}</td><td class="n">${Math.round(r.w.temp)} °C</td><td class="n">${r.w.rainProb ?? 0} %</td><td class="n">${Math.round(r.w.wind)} / ${Math.round(r.w.gust)} km/h</td></tr>`).join('');
@@ -64,7 +69,7 @@
         <p class="route">${U.esc(label(d.from))} → ${U.esc(label(d.to))}</p>
         <div class="figs f4"><div><b>${U.fmtKm(d.dist)}</b><span>Distance</span></div><div><b>${U.fmtDur(d.dur + d.pause)}</b><span>${d.pause ? 'Durée avec pauses' : 'Durée estimée'}</span></div>
           <div><b>+${U.nf(d.up)} m</b><span>Dénivelé +</span></div><div><b>${hm(d.start)} → ${hm(d.end)}</b><span>Départ → arrivée</span></div></div>
-        <table>${head}<tbody>${legs.map(i => legRow(s.legs[i], i, d.i)).join('')}</tbody></table>
+        <table>${head}<tbody>${legRows(legs, d.i)}</tbody></table>
         ${wr.length ? `<h3>Météo</h3><table>${wxHead}<tbody>${wxTable(wr)}</tbody></table>` : ''}
         ${ps.length ? `<h3>Sur le parcours</h3><table><tbody>${ps.map(poiRow).join('')}</tbody></table>` : ''}
         ${T.days.stopsIn(s, d).map(pauseHtml).join('')}

@@ -109,6 +109,7 @@ button { cursor: pointer; }
 }
 .wp-locked { border-radius: 8px; cursor: pointer; }
 .wp-gap { width: 10px; height: 10px; border-width: 2px; font-size: 0; opacity: .8; }
+.wp-via, #app.hide-nums .wp-via { width: 16px; height: 16px; border-width: 4px; font-size: 0; }   /* point de passage : petit anneau */
 .wp-night { background: #2f3a8f; color: #fff; outline-color: #2f3a8f; width: 34px; height: 34px; }
 .wp-pause { background: #e8590c; color: #fff; outline-color: #e8590c; width: 34px; height: 34px; }
 .wp-pause svg { width: 20px; height: 20px; pointer-events: none; }

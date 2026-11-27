@@ -75,12 +75,12 @@ T.panel = (() => {
 
   function legs(state) {
     if (!state.legs.length) return '';
-    const name = i => {
-      const w = state.waypoints[i];
-      return U.esc(w && w.name ? w.name : i === 0 ? 'Départ' : i === state.waypoints.length - 1 ? 'Arrivée' : 'Étape ' + i);
-    };
-    const node = i => i === 0 ? 'D' : i === state.waypoints.length - 1 ? 'A' : i;
-    return `<h3>Tronçons</h3><ol class="legs">${state.legs.map((L, i) => {
+    const wps = state.waypoints, X = T.io.export;
+    const name = i => U.esc(wps[i] ? X.wpName(wps[i], i, wps.length, wps) : '');
+    const node = i => i === 0 ? 'D' : i === wps.length - 1 ? 'A' : X.stepNo(wps, i);
+    // Détail d'un tronçon : type de route préféré et chiffres
+    const meta = i => {
+      const L = state.legs[i];
       const r = roadOf(L, state.mode), a = L.an || {};
       let st = '';
       if (L.status === 'pending') st = '<span class="calc"><i class="spin"></i>calcul…</span>';
@@ -89,9 +89,15 @@ T.panel = (() => {
       const chip = L.kind === 'track'
         ? `<span class="chip" style="--c:${r.color};--ci:${r.ink}" title="${U.esc(L.name || '')}"><span class="cart">${r.short}</span>${U.esc(L.name || r.label)}</span>`
         : `<button class="chip" data-act="road" data-i="${i}" style="--c:${r.color};--ci:${r.ink}" title="Changer le type de route préféré"><span class="pref">Préférer</span><span class="cart">${U.esc(r.short)}</span>${U.esc(r.label)}${r.auto ? '<span class="pref">proposé</span>' : ''}${I('chev', 'sm')}</button>`;
-      return `<li class="leg leg-${L.status}">
-        <button class="leg-names" data-act="focus" data-i="${i}"><span class="node">${node(i)}</span>${name(i)}<i>→</i><span class="node">${node(i + 1)}</span>${name(i + 1)}</button>
-        <div class="leg-meta">${chip}${st}</div></li>`;
+      return `<div class="leg-meta">${chip}${st}</div>`;
+    };
+    // Une carte par trajet d'étape à étape : les points de passage n'y apparaissent pas
+    return `<h3>Tronçons</h3><ol class="legs">${X.groups(wps, state.legs.map((L, i) => i)).map(g => {
+      const i = g[0], end = g[g.length - 1] + 1;
+      const status = ['error', 'pending'].find(x => g.some(j => state.legs[j].status === x)) || 'ok';
+      return `<li class="leg leg-${status}">
+        <button class="leg-names" data-act="focus" data-i="${i}"><span class="node">${node(i)}</span>${name(i)}<i>→</i><span class="node">${node(end)}</span>${name(end)}</button>
+        ${g.map(meta).join('')}</li>`;
     }).join('')}</ol>`;
   }
 

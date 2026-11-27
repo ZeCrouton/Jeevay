@@ -256,14 +256,16 @@
   function wpPopup(id) {
     const s = st(), i = s.waypoints.findIndex(w => w.id === id), w = s.waypoints[i];
     if (!w) return;
-    const label = T.io.export.wpName(w, i, s.waypoints.length);
+    const label = T.io.export.wpName(w, i, s.waypoints.length, s.waypoints);
+    const middle = i > 0 && i < s.waypoints.length - 1, via = T.io.export.isVia(w, i, s.waypoints.length);
     const el = document.createElement('div');
     el.className = 'pop';
     el.innerHTML = `<div class="pop-h"><b>${U.esc(label)}</b></div>
       ${S.locked ? '<p class="pop-m">Tracé verrouillé</p>' : w.locked ? '<p class="pop-m">Extrémité d’un tracé importé</p>' : '<p class="pop-m">Glissez le point pour le déplacer</p>'}
       <div class="pop-a">
-        ${i > 0 && i < s.waypoints.length - 1 && !w.pause ? `<button class="btn btn-sm${w.night ? ' btn-night' : ''}" data-a="night">${I('bed')}${w.night ? 'Retirer la nuit' : 'Nuit ici'}</button>` : ''}
-        ${i > 0 && i < s.waypoints.length - 1 && !w.night ? `<button class="btn btn-sm${w.pause ? ' btn-pause' : ''}" data-a="pause">${I('cup')}${w.pause ? 'Retirer la pause' : 'Pause ici'}</button>` : ''}
+        ${middle && !via && !w.pause ? `<button class="btn btn-sm${w.night ? ' btn-night' : ''}" data-a="night">${I('bed')}${w.night ? 'Retirer la nuit' : 'Nuit ici'}</button>` : ''}
+        ${middle && !w.night && !w.pause && !w.gap && !S.locked ? `<button class="btn btn-sm" data-a="via">${I('route')}${via ? 'Redevenir une étape' : 'Point de passage'}</button>` : ''}
+        ${middle && !via && !w.night ? `<button class="btn btn-sm${w.pause ? ' btn-pause' : ''}" data-a="pause">${I('cup')}${w.pause ? 'Retirer la pause' : 'Pause ici'}</button>` : ''}
         <a class="btn btn-sm" href="${U.streetViewUrl(w.c)}" target="_blank" rel="noopener">${I('eye')}Street View</a>
         ${S.locked ? '' : `<button class="btn btn-sm btn-danger" data-a="del">${I('trash')}Supprimer</button>`}
       </div>
@@ -291,6 +293,12 @@
     const del = el.querySelector('[data-a="del"]');
     if (del) del.addEventListener('click', () => removePoint(id));
     const nt = el.querySelector('[data-a="night"]');
+    const vb = el.querySelector('[data-a="via"]');
+    if (vb) vb.addEventListener('click', () => {
+      M.closePopup();
+      S.commit(x => { x.waypoints = x.waypoints.map(p => p.id === id ? { ...p, via: via ? undefined : true } : p); }, true);
+      UI.toast(via ? 'Le point redevient une étape' : 'Point de passage : il guide la route sans compter comme étape');
+    });
     const ps = el.querySelector('[data-a="pause"]');
     if (ps) ps.addEventListener('click', () => {
       M.closePopup();
@@ -768,7 +776,7 @@
         ['slope', 'Pente', 'Colore le tracé selon la pente.'], ['layers', 'Fond de carte', 'Change l’aspect de la carte.'], ['locate', 'Me localiser', 'Centre la carte sur votre position et l’indique par un point bleu.'],
         ['play', 'Parcourir le tracé', 'Un point se déplace sur le tracé du début à la fin : pause, reprise, vitesse, recommencer, ou faites glisser la barre.'], ['hash', 'Points du tracé', 'Chaque appui change l’affichage : points numérotés, points sans numéro, puis tracé seul (aucun point).'], ['lock', 'Verrouiller', 'Empêche toute modification du tracé par erreur.'], ['help', 'Aide', 'Affiche cette page.']]],
       ['Panneau du parcours', [['download', 'Importer', 'Ouvre un fichier GPX pour le charger sur la carte.'], ['link', 'Partager', 'Crée un lien vers votre parcours.'],
-        ['upload', 'Exporter GPX', 'Enregistre le parcours en fichier GPX pour votre GPS ou votre montre.'], ['bed', 'Nuit', 'Touchez une étape puis « Nuit ici » : le parcours est découpé en journées (distance, durée et GPX par jour, hébergements autour de la nuit).'], ['more', 'Plus d’options', 'Mes parcours, boucle, road-book, inverser le sens, Google Maps, réglages, tout effacer.'], ['link', 'Retrouver mes parcours (code)', 'Crée un code personnel pour retrouver vos parcours enregistrés sur un autre appareil. Gardez-le secret : il donne accès à vos parcours.']]]
+        ['upload', 'Exporter GPX', 'Enregistre le parcours en fichier GPX pour votre GPS ou votre montre.'], ['route', 'Point de passage', 'Touchez un point puis « Point de passage » : il impose la route sans être une étape.'], ['bed', 'Nuit', 'Touchez une étape puis « Nuit ici » : le parcours est découpé en journées (distance, durée et GPX par jour, hébergements autour de la nuit).'], ['more', 'Plus d’options', 'Mes parcours, boucle, road-book, inverser le sens, Google Maps, réglages, tout effacer.'], ['link', 'Retrouver mes parcours (code)', 'Crée un code personnel pour retrouver vos parcours enregistrés sur un autre appareil. Gardez-le secret : il donne accès à vos parcours.']]]
     ];
     UI.modal({
       title: 'À quoi servent les boutons ?', wide: true,

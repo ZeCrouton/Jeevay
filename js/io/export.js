@@ -5,9 +5,23 @@ T.io = T.io || {};
 T.io.export = (() => {
   const U = T.util, A = T.analysis;
 
-  function wpName(w, i, n) {
+  // « Point de passage » : force la route sans être une étape (une nuit ou une pause en refait une étape)
+  const isVia = (w, i, n) => !!w.via && !w.night && !w.pause && i > 0 && i < n - 1;
+  const isStep = (w, i, n) => i === 0 || i === n - 1 || (!w.gap && !isVia(w, i, n));
+  // Numéro d'une étape : les points de passage et les coupures GPS ne comptent pas
+  const stepNo = (wps, i) => wps.slice(1, i + 1).filter((w, k) => isStep(w, k + 1, wps.length)).length;
+  // Tronçons regroupés d'une étape à la suivante (idx : numéros des tronçons, dans l'ordre)
+  const groups = (wps, idx) => idx.reduce((g, i) => {
+    const last = g[g.length - 1];
+    if (last && last[last.length - 1] === i - 1 && isVia(wps[i], i, wps.length)) last.push(i); else g.push([i]);
+    return g;
+  }, []);
+  // wps (facultatif) : liste complète des points, pour numéroter sans les points de passage
+  function wpName(w, i, n, wps) {
     if (w.name) return w.name;
-    return i === 0 ? 'Départ' : i === n - 1 ? 'Arrivée' : 'Étape ' + i;
+    if (i === 0) return 'Départ';
+    if (i === n - 1) return 'Arrivée';
+    return wps && isVia(w, i, n) ? 'Point de passage' : 'Étape ' + (wps ? stepNo(wps, i) : i);
   }
   const MAX = 99;
   // Garde au plus « max » éléments, en conservant le premier et le dernier, répartis régulièrement
@@ -25,29 +39,31 @@ T.io.export = (() => {
       `<metadata><name>${name}</name><time>${new Date().toISOString()}</time></metadata>`
     ];
     const wd = i => i === n - 1 ? comb.total : (comb.starts[i] ?? 0);
-    // Étapes : sans les points techniques (coupures GPS comblées), 99 au plus (limite de Liberty Rider et de nombreux GPS)
-    const real = state.waypoints.map((w, i) => ({ w, i })).filter(({ w, i }) => !w.gap || i === 0 || i === n - 1);
+    // Étapes : sans les points techniques (coupures GPS comblées) ni les points de passage, 99 au plus (limite de Liberty Rider et de nombreux GPS)
+    const real = state.waypoints.map((w, i) => ({ w, i })).filter(({ w, i }) => isStep(w, i, n));
     real.forEach((x, j) => { x.label = wpName(x.w, j, real.length) + (x.w.night && !x.w.name ? ' (nuit)' : '') + (x.w.pause && !x.w.name ? ' (pause)' : ''); });
     const mine = real.filter(({ i }) => inR(wd(i)));
     if (opts.wpt) thin(mine, MAX).forEach(({ w, label }) => L.push(pt('wpt', w.c, `<name>${U.esc(label)}</name>`)));
     if (opts.rte) {
       // Étapes + points de guidage réguliers pour que le GPS suive les mêmes routes, 99 points au plus
       const keep = thin(mine, MAX).map(({ i, label }) => ({ d: Math.round(wd(i)), i, label }));
-      const len = r1 - r0, G = Math.max(0, Math.min(Math.floor(len / 5000), MAX - keep.length - 2));
-      const ds = keep.slice();
+      // Les points de passage restent dans l'itinéraire comme points de guidage
+      const vias = state.waypoints.map((w, i) => ({ w, i, d: Math.round(wd(i)) })).filter(x => isVia(x.w, x.i, n) && inR(x.d)).map(({ i, d }) => ({ d, i, via: true }));
+      const len = r1 - r0, G = Math.max(0, Math.min(Math.floor(len / 5000), MAX - keep.length - vias.length - 2));
+      const ds = keep.concat(thin(vias, Math.max(2, MAX - keep.length)));
       const edge = d => { if (!keep.some(x => Math.abs(x.d - d) < 50)) ds.push({ d, i: -1 }); };
       if (opts.range) { edge(r0); edge(r1); }
       for (let k = 1; k <= G; k++) {
         const d = Math.round(r0 + len * k / (G + 1));
-        if (!keep.some(x => Math.abs(x.d - d) < 1000)) ds.push({ d, i: -1 });
+        if (!ds.some(x => x.i >= 0 && Math.abs(x.d - d) < 1000)) ds.push({ d, i: -1 });
       }
       ds.sort((a, b) => a.d - b.d);
       L.push(`<rte><name>${name}</name>`);
       let g = 0;
-      thin(ds, MAX).forEach(({ d, i, label }) => {
+      thin(ds, MAX).forEach(({ d, i, label, via }) => {
         const c = i >= 0 ? state.waypoints[i].c : U.at(comb.coords, comb.cum, d);
         if (!c) return;
-        L.push(pt('rtept', c, `<name>${U.esc(i >= 0 ? label : 'Guidage ' + (++g))}</name>`));
+        L.push(pt('rtept', c, `<name>${U.esc(i >= 0 && !via ? label : 'Guidage ' + (++g))}</name>`));
       });
       L.push('</rte>');
     }
@@ -92,5 +108,5 @@ T.io.export = (() => {
       '&waypoints=' + encodeURIComponent(via.map(f).join('|')) + '&travelmode=' + mode;
   }
 
-  return { gpx, download, safeName, googleMapsUrl, wpName };
+  return { gpx, download, safeName, googleMapsUrl, wpName, isVia, isStep, stepNo, groups };
 })();

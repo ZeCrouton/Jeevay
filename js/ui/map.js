@@ -187,12 +187,13 @@ T.map = (() => {
       const el = m.getElement().firstChild;
       const kind = n === 1 ? 'start' : i === 0 ? 'start' : i === n - 1 ? 'end' : 'mid';
       const gap = w.gap && kind === 'mid';
-      if (kind === 'mid' && !gap) num++;
-      el.className = `wp wp-${kind}${w.locked ? ' wp-locked' : ''}${gap ? ' wp-gap' : ''}${w.night && kind === 'mid' ? ' wp-night' : ''}${w.pause && kind === 'mid' ? ' wp-pause' : ''}`;
+      const via = !gap && T.io.export.isVia(w, i, n);
+      if (kind === 'mid' && !gap && !via) num++;
+      el.className = `wp wp-${kind}${w.locked ? ' wp-locked' : ''}${gap ? ' wp-gap' : ''}${via ? ' wp-via' : ''}${w.night && kind === 'mid' ? ' wp-night' : ''}${w.pause && kind === 'mid' ? ' wp-pause' : ''}`;
       if (w.night && kind === 'mid') el.innerHTML = '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M13 9a7.500 7.500 0 1 0 9 10.500A8.500 8.500 0 0 1 13 9Z" fill="#fff"/><text x="19" y="15" font-size="12" font-weight="800" fill="#ffd43b" font-family="system-ui,sans-serif">z</text><text x="24.5" y="9" font-size="8.5" font-weight="800" fill="#ffd43b" font-family="system-ui,sans-serif">z</text></svg>';
       else if (w.pause && kind === 'mid') el.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9Z"/><path d="M17 10h1.500a2.500 2.500 0 0 1 0 5H17M8 3v3M12 3v3"/></svg>';
-      else el.textContent = i === 0 ? 'D' : i === n - 1 ? 'A' : gap ? '' : String(num);
-      el.title = gap ? 'Coupure du signal GPS, comblée par la route' : (w.night && kind === 'mid' ? 'Nuit — ' : '') + (w.pause && kind === 'mid' ? `Pause ${w.pause} min — ` : '') + (w.name ? w.name + ' — ' : '') + (w.locked ? 'extrémité d’un tracé importé' : 'glisser pour déplacer');
+      else el.textContent = i === 0 ? 'D' : i === n - 1 ? 'A' : gap || via ? '' : String(num);
+      el.title = gap ? 'Coupure du signal GPS, comblée par la route' : via ? 'Point de passage — glisser pour déplacer' : (w.night && kind === 'mid' ? 'Nuit — ' : '') + (w.pause && kind === 'mid' ? `Pause ${w.pause} min — ` : '') + (w.name ? w.name + ' — ' : '') + (w.locked ? 'extrémité d’un tracé importé' : 'glisser pour déplacer');
       m.setDraggable(!w.locked && !(h.isLocked && h.isLocked()));
       const p = m.getLngLat();
       if (Math.abs(p.lng - w.c[0]) > 1e-9 || Math.abs(p.lat - w.c[1]) > 1e-9) m.setLngLat(w.c);
