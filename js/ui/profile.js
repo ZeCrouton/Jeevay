@@ -9,7 +9,7 @@ T.profile = (() => {
     wrap = el; onHover = hover;
     cv = el.querySelector('canvas');
     tip = el.querySelector('.profile-tip');
-    new ResizeObserver(draw).observe(el);
+    new ResizeObserver(() => draw()).observe(el);
     cv.addEventListener('pointermove', move);
     cv.addEventListener('pointerdown', move);
     cv.addEventListener('pointerleave', () => { hoverX = null; tip.hidden = true; draw(); onHover(null); });
@@ -25,8 +25,8 @@ T.profile = (() => {
     return getComputedStyle(probe).color;
   };
 
-  function geom() {
-    const W = cv.clientWidth, H = cv.clientHeight, S = data.samples;
+  function geom(W = cv.clientWidth, H = cv.clientHeight) {
+    const S = data.samples;
     let lo = Infinity, hi = -Infinity;
     S.forEach(p => { if (p.e < lo) lo = p.e; if (p.e > hi) hi = p.e; });
     const span = Math.max(40, hi - lo);
@@ -36,17 +36,21 @@ T.profile = (() => {
     return { W, H, lo, hi, x, y };
   }
 
-  function draw() {
-    if (!cv) return;
-    const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
-    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
-    const g = cv.getContext('2d');
+  // out (facultatif) : dessin sur un autre canevas, pour l'impression : { cv, W, H, scale }
+  function draw(out) {
+    const print = !!(out && out.cv), target = print ? out.cv : cv;
+    if (!target) return;
+    const dpr = print ? out.scale : window.devicePixelRatio || 1;
+    const W = print ? out.W : target.clientWidth, H = print ? out.H : target.clientHeight;
+    target.width = Math.round(W * dpr); target.height = Math.round(H * dpr);
+    const g = target.getContext('2d');
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, W, H);
     const has = data && data.samples.length > 1 && data.total > 0;
-    wrap.classList.toggle('is-empty', !has);
+    if (!print) wrap.classList.toggle('is-empty', !has);
     if (!has) return;
-    const G = geom(), S = data.samples, ink = css('--ink') || '#111', muted = css('--muted') || '#888', line = css('--line') || '#ddd';
+    // Impression : couleurs claires fixes, quel que soit le thème de l'écran
+    const G = geom(W, H), S = data.samples, ink = print ? '#14161b' : css('--ink') || '#111', muted = print ? '#5f6672' : css('--muted') || '#888', line = print ? '#e3e6ea' : css('--line') || '#ddd';
     g.font = '12px "Barlow Semi Condensed", system-ui, sans-serif';
     // Grille horizontale
     const step = niceStep((G.hi - G.lo) / 3);
@@ -79,13 +83,21 @@ T.profile = (() => {
     data.marks.slice(1, -1).forEach(d => { const xx = Math.round(G.x(d)) + 0.5; g.beginPath(); g.moveTo(xx, PAD.t); g.lineTo(xx, G.H - PAD.b); g.stroke(); });
     g.setLineDash([]);
     // Survol
-    if (hoverX != null) {
+    if (!print && hoverX != null) {
       const d = xToD(hoverX, G), e = T.analysis.eleAt(data.comb, d), xx = G.x(d), yy = G.y(e);
       g.strokeStyle = ink; g.lineWidth = 1;
       g.beginPath(); g.moveTo(xx + 0.5, PAD.t); g.lineTo(xx + 0.5, G.H - PAD.b); g.stroke();
       g.fillStyle = '#fff'; g.strokeStyle = data.accent; g.lineWidth = 3;
       g.beginPath(); g.arc(xx, yy, 5, 0, Math.PI * 2); g.fill(); g.stroke();
     }
+  }
+
+  // Image haute définition du profil (pleine largeur d'une page A4), indépendante de la taille à l'écran
+  function image() {
+    if (!data || data.samples.length < 2 || !(data.total > 0)) return null;
+    const c = document.createElement('canvas');
+    draw({ cv: c, W: 720, H: 200, scale: 4 });
+    return c.toDataURL('image/png');
   }
 
   function xToD(px, G) { return T.util.clamp((px - PAD.l) / (G.W - PAD.l - PAD.r), 0, 1) * data.total; }
@@ -119,5 +131,5 @@ T.profile = (() => {
     return `rgba(${(v >> 16) & 255},${(v >> 8) & 255},${v & 255},${a})`;
   }
 
-  return { init, set, showAt };
+  return { init, set, showAt, image };
 })();

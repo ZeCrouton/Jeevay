@@ -12,9 +12,8 @@
     T.app.fitAll();
     await new Promise(r => setTimeout(r, 700));
     const mapImg = await T.map.snapshot();
-    const prof = document.querySelector('#profile canvas');
     let profImg = null;
-    try { profImg = prof && prof.width ? prof.toDataURL('image/png') : null; } catch (e) { /* ignore */ }
+    try { profImg = T.profile.image(); } catch (e) { /* ignore */ }
     const sum = A.summary(s);
     T.hooks.alerts.forEach(f => { try { f(s, sum, comb); } catch (e) { /* ignore */ } });
     w.document.open();
@@ -91,7 +90,7 @@
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700&display=swap"><style>${css}</style></head><body>
       <div class="bar"><button onclick="print()">Imprimer / enregistrer en PDF</button></div>
       <h1>${U.esc(s.name)}</h1>
-      <p class="sub">${mode.label}${dep ? ' · départ ' + dep.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + ' à ' + hm(dep) : ''}${sum.level ? ' · niveau ' + sum.level[0] : ''}${sc ? ' · plaisir moto ' + U.nf(sc.v, 1) + '/10' : ''}</p>
+      <p class="sub">${multi ? `<b>${D.length} jours</b> · ` : ''}${mode.label}${dep ? ' · départ ' + dep.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + ' à ' + hm(dep) : ''}${sum.level ? ' · niveau ' + sum.level[0] : ''}${sc ? ' · plaisir moto ' + U.nf(sc.v, 1) + '/10' : ''}</p>
       <div class="figs"><div><b>${U.fmtKm(sum.distance)}</b><span>Distance</span></div><div><b>${U.fmtDur(sum.duration)}</b><span>Durée estimée</span></div>
         <div><b>+${U.nf(sum.up)} m</b><span>Dénivelé +</span></div><div><b>−${U.nf(sum.down)} m</b><span>Dénivelé −</span></div>
         <div><b>${sum.maxE != null ? U.nf(sum.maxE) + ' m' : '—'}</b><span>Altitude max</span></div></div>
