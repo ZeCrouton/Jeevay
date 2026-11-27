@@ -225,7 +225,26 @@ T.map = (() => {
     ready = false;
     map.setStyle(s.style || s.url, { diff: false });
   }
+  // Point « ma position » : un seul repère, déplacé à chaque nouvelle localisation ; il laisse passer les clics.
+  let me = null;
+  function setMe(c) {
+    if (!me) {
+      const el = document.createElement('div');
+      el.className = 'me-dot';
+      el.setAttribute('aria-label', 'Ma position');
+      me = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(c).addTo(map);
+    } else me.setLngLat(c);
+  }
+  // Repère de l'adresse recherchée (épingle rouge, pointe sur la position exacte) ; null pour l'enlever.
+  let found = null;
+  function setFound(c) {
+    if (found) { found.remove(); found = null; }
+    if (!c) return;
+    found = new maplibregl.Marker({ color: '#e03131' }).setLngLat(c).addTo(map);
+    found.getElement().style.pointerEvents = 'none';
+    found.getElement().querySelectorAll('*').forEach(e => { e.style.pointerEvents = 'none'; });
+  }
   const center = () => { const c = map.getCenter(); return [c.lng, c.lat]; };
 
-  return { init, isWater, setPois, snapshot, setLegs, setAlerts, setHover, syncMarkers, openPopup, closePopup, fit, flyTo, setStyle, center, get raw() { return map; } };
+  return { init, isWater, setPois, snapshot, setLegs, setAlerts, setHover, syncMarkers, openPopup, closePopup, fit, flyTo, setStyle, setMe, setFound, center, get raw() { return map; } };
 })();

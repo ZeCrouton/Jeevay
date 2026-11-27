@@ -765,7 +765,7 @@
     const rows = [
       ['Carte', [['undo', 'Annuler', 'Annule la dernière modification (Ctrl+Z).'], ['redo', 'Rétablir', 'Rétablit ce que vous venez d’annuler (Ctrl+Y).'],
         ['fit', 'Voir tout le parcours', 'Cadre la carte sur l’ensemble du tracé.'], ['append', 'Ajouter à la fin', 'Chaque clic ajoute un point au bout du parcours, même sur le tracé (utile pour un aller-retour).'],
-        ['slope', 'Pente', 'Colore le tracé selon la pente.'], ['layers', 'Fond de carte', 'Change l’aspect de la carte.'], ['locate', 'Me localiser', 'Centre la carte sur votre position.'],
+        ['slope', 'Pente', 'Colore le tracé selon la pente.'], ['layers', 'Fond de carte', 'Change l’aspect de la carte.'], ['locate', 'Me localiser', 'Centre la carte sur votre position et l’indique par un point bleu.'],
         ['play', 'Parcourir le tracé', 'Un point se déplace sur le tracé du début à la fin : pause, reprise, vitesse, recommencer, ou faites glisser la barre.'], ['hash', 'Points du tracé', 'Chaque appui change l’affichage : points numérotés, points sans numéro, puis tracé seul (aucun point).'], ['lock', 'Verrouiller', 'Empêche toute modification du tracé par erreur.'], ['help', 'Aide', 'Affiche cette page.']]],
       ['Panneau du parcours', [['download', 'Importer', 'Ouvre un fichier GPX pour le charger sur la carte.'], ['link', 'Partager', 'Crée un lien vers votre parcours.'],
         ['upload', 'Exporter GPX', 'Enregistre le parcours en fichier GPX pour votre GPS ou votre montre.'], ['bed', 'Nuit', 'Touchez une étape puis « Nuit ici » : le parcours est découpé en journées (distance, durée et GPX par jour, hébergements autour de la nuit).'], ['more', 'Plus d’options', 'Mes parcours, boucle, road-book, inverser le sens, Google Maps, réglages, tout effacer.'], ['link', 'Retrouver mes parcours (code)', 'Crée un code personnel pour retrouver vos parcours enregistrés sur un autre appareil. Gardez-le secret : il donne accès à vos parcours.']]]
@@ -907,7 +907,9 @@
   function locate() {
     if (!navigator.geolocation) { UI.toast('Géolocalisation indisponible', 'error'); return; }
     const ok = p => {
-      M.flyTo([p.coords.longitude, p.coords.latitude], p.coords.accuracy > 2000 ? 11 : 13);
+      const c = [p.coords.longitude, p.coords.latitude];
+      M.setMe(c);
+      M.flyTo(c, p.coords.accuracy > 2000 ? 11 : 15);
       if (p.coords.accuracy > 2000) UI.toast(`Position approximative (± ${Math.round(p.coords.accuracy / 1000)} km) : sur PC, le navigateur n’a pas de GPS. Recherchez votre lieu dans la barre pour être précis.`, 'info', 7000);
     };
     const fail = e => UI.toast(e && e.code === 1
@@ -916,8 +918,8 @@
       : 'Position introuvable pour le moment : réessayez à l’extérieur ou avec le GPS activé.', 'error', 6000);
     UI.toast('Recherche de votre position…', 'info', 2500);
     navigator.geolocation.getCurrentPosition(ok,
-      e => { if (e && e.code === 1) return fail(e); navigator.geolocation.getCurrentPosition(ok, fail, { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 }); },
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 });
+      e => { if (e && e.code === 1) return fail(e); navigator.geolocation.getCurrentPosition(ok, fail, { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }); },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
   }
 
   // ---------- Recherche ----------
@@ -931,6 +933,7 @@
     };
     const run = U.debounce(async () => {
       const q = input.value.trim();
+      if (!q) M.setFound(null);
       if (q.length < 3) { results = []; note = ''; show(); return; }
       if (ctrl) ctrl.abort();
       const my = ctrl = new AbortController();
@@ -946,7 +949,7 @@
     }, 280);
     input.addEventListener('input', run);
     input.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && results[0]) { M.flyTo(results[0].c, 13); results = []; show(); input.blur(); }
+      if (e.key === 'Enter' && results[0]) { M.setFound(results[0].c); M.flyTo(results[0].c, 16); results = []; show(); input.blur(); }
       if (e.key === 'Escape') { results = []; show(); input.blur(); }
     });
     list.addEventListener('click', e => {
@@ -969,7 +972,8 @@
       }
       const r = results[+(b.dataset.k ?? b.dataset.add)];
       if (!r) return;
-      M.flyTo(r.c, 13);
+      M.setFound(b.dataset.add != null ? null : r.c);   // ajouté au parcours : le point du tracé suffit
+      M.flyTo(r.c, 16);
       if (b.dataset.add != null) addPoint(r.c);
       results = []; show(); input.value = r.label;
     });
