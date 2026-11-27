@@ -158,6 +158,17 @@
   const label = (s, m) => m.wi >= 0 ? T.io.export.wpName(s.waypoints[m.wi], m.wi, s.waypoints.length, s.waypoints) : `km ${U.nf(m.d / 1000)}`;
   const sleepNear = k => (T.poi && T.poi.data.items || []).filter(it => it.cat === 'sleep' && it.night === k).length;
 
+  /* Jours masqués sur la carte (tous affichés par défaut, non mémorisé).
+     Remis à zéro si le parcours ou le nombre de jours change. */
+  let off = new Set(), offKey = '', showAll = false;
+  function visibility(s, comb) {
+    const D = days(s, comb), key = D.length + ':' + (s.waypoints[0] ? s.waypoints[0].id : '');
+    if (key !== offKey) { off.clear(); offKey = key; }
+    if (showAll || !off.size) return null;   // null : tout est visible
+    // Vrai si la distance d appartient à un jour affiché (les bornes appartiennent aux deux jours voisins)
+    return d => D.some(x => !off.has(x.i) && d >= x.a - 1 && d <= x.b + 1);
+  }
+
   T.hooks.render.push((s, sum, comb) => {
     const el = document.getElementById('days');
     if (!el) return;
@@ -166,16 +177,17 @@
     const a = document.activeElement;
     if (D.length > 1 && a && a.tagName === 'INPUT' && el.contains(a)) { skipped = true; return; }
     if (D.length < 2) { el.innerHTML = ''; return; }
-    el.innerHTML = `<h3>Jours <span class="cnt">${D.length}</span></h3><ol class="days">${D.map(d => {
+    el.innerHTML = `<div class="sec-h"><h3>Jours <span class="cnt">${D.length}</span></h3>${off.size ? `<button class="mini" data-act="dayAll">${I('eye', 'sm')}Tout afficher</button>` : ''}</div><ol class="days">${D.map(d => {
       const n = d.i < D.length - 1 ? sleepNear(d.i) : 0;
-      return `<li class="day">
+      const shown = !off.has(d.i);
+      return `<li class="day${shown ? '' : ' day-off'}">
         <button class="day-h" data-act="dayFocus" data-i="${d.i}"><b>Jour ${d.i + 1}</b><span>${U.esc(label(s, d.from))}<i>→</i>${U.esc(label(s, d.to))}</span></button>
         <div class="day-time">${dayTime(d)}</div>
         ${dayWx(d)}
         ${stopsIn(s, d).map(x => `<p class="day-stay">${I('cup', 'sm')} Pause : <b>${U.esc((x.w.stay && x.w.stay.name) || T.io.export.wpName(x.w, x.i, s.waypoints.length, s.waypoints))}</b> · ${x.w.pause} min</p>`).join('')}
         ${d.i < D.length - 1 && d.to.wi >= 0 && s.waypoints[d.to.wi].stay && s.waypoints[d.to.wi].stay.name ? `<p class="day-stay">${I('bed', 'sm')} Nuit : <b>${U.esc(s.waypoints[d.to.wi].stay.name)}</b></p>` : ''}
         <div class="day-figs"><span>${U.fmtKm(d.dist)}</span><span>${U.fmtDur(d.dur + d.pause)}${d.pause ? ` <small>dont ${U.fmtDur(d.pause)} de pause</small>` : ''}</span><span>+${U.nf(d.up)} m</span></div>
-        <div class="day-a">${d.i < D.length - 1 ? `<button class="mini" data-act="daySleep" data-i="${d.i}">${I('bed', 'sm')}Dormir ici${n ? ` <b>${n}</b>` : ''}</button>` : ''}<button class="mini" data-act="dayGpx" data-i="${d.i}">${I('upload', 'sm')}GPX du jour</button></div></li>`;
+        <div class="day-a"><button class="mini" data-act="dayShow" data-i="${d.i}" aria-pressed="${shown}" title="Afficher ou masquer ce jour sur la carte">${I('eye', 'sm')}${shown ? 'Affiché' : 'Masqué'}</button>${d.i < D.length - 1 ? `<button class="mini" data-act="daySleep" data-i="${d.i}">${I('bed', 'sm')}Dormir ici${n ? ` <b>${n}</b>` : ''}</button>` : ''}<button class="mini" data-act="dayGpx" data-i="${d.i}">${I('upload', 'sm')}GPX du jour</button></div></li>`;
     }).join('')}</ol>${D[0].auto ? '<p class="muted small">Découpage proposé automatiquement (réglage). Marquez une étape « Nuit » pour choisir vous-même où dormir.</p>' : ''}`;
   });
 
@@ -201,9 +213,26 @@
     T.app.S.commit(x => { x.waypoints = x.waypoints.map(p => p.id === id ? { ...p, dep: e.target.value } : p); }, true);
   });
 
+  // Cadre la carte sur les jours affichés
+  function fitShown() {
+    const comb = A.combine(T.app.st()), see = visibility(T.app.st(), comb);
+    const pts = comb.coords.filter((c, k) => !see || cur.some(x => !off.has(x.i) && comb.cum[k] >= x.a && comb.cum[k] <= x.b));
+    if (pts.length > 1) T.map.fit(pts);
+  }
+
   Object.assign(T.hooks.act, {
+    dayShow: el => {
+      const i = +el.dataset.i;
+      if (off.has(i)) off.delete(i);
+      else if (off.size >= cur.length - 1) { T.ui.toast('Gardez au moins un jour affiché'); return; }
+      else off.add(i);
+      T.map.closePopup();
+      T.app.render(); fitShown();
+    },
+    dayAll: () => { off.clear(); T.app.render(); fitShown(); },
     dayFocus: el => {
       const d = cur[+el.dataset.i]; if (!d) return;
+      if (off.delete(d.i)) T.app.render();
       const comb = A.combine(T.app.st()), pts = comb.coords.filter((c, k) => comb.cum[k] >= d.a && comb.cum[k] <= d.b);
       if (pts.length > 1) T.map.fit(pts);
       T.app.collapseSheet();
@@ -223,5 +252,5 @@
     }
   });
 
-  T.days = { stopSec: (s, a, b) => stopSec(s, A.combine(s), a, b), hasPauses, stopsIn, days: s => days(s, A.combine(s)), nights: s => nights(s, A.combine(s)), dateAt: (s, d, k) => dateAt(s, A.combine(s), d, k), schedSig, totalDuration, pausesFor, dayKm, DEF_KM };
+  T.days = { visibility, showEverything: v => { showAll = v; T.app.render(); }, stopSec: (s, a, b) => stopSec(s, A.combine(s), a, b), hasPauses, stopsIn, days: s => days(s, A.combine(s)), nights: s => nights(s, A.combine(s)), dateAt: (s, d, k) => dateAt(s, A.combine(s), d, k), schedSig, totalDuration, pausesFor, dayKm, DEF_KM };
 })();

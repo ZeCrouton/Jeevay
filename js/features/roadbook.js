@@ -9,9 +9,12 @@
     const w = window.open('', '_blank');
     if (!w) { T.ui.toast('Fenêtre bloquée : autorisez les fenêtres pour ce site', 'error', 6000); return; }
     w.document.write('<p style="font:16px system-ui;padding:24px">Préparation du road-book…</p>');
+    // Le road-book reprend tout le parcours, même si des jours sont masqués à l'écran
+    if (T.days) T.days.showEverything(true);
     T.app.fitAll();
     await new Promise(r => setTimeout(r, 700));
     const mapImg = await T.map.snapshot();
+    if (T.days) T.days.showEverything(false);
     let profImg = null;
     try { profImg = T.profile.image(); } catch (e) { /* ignore */ }
     const sum = A.summary(s);

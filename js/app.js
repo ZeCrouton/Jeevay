@@ -360,6 +360,27 @@
     return feats;
   }
 
+  // Ne garde que les portions du tracé appartenant aux jours affichés (see(d) : distance visible)
+  function clipFeatures(feats, s, comb, see) {
+    const cums = new Map(), out = [];
+    feats.forEach(f => {
+      const i = f.properties.leg, L = s.legs[i], a = comb.starts[i], b = comb.starts[i + 1] ?? comb.total;
+      const cs = f.geometry.coordinates;
+      if (f.properties.pending || !L.coords) { if (see((a + b) / 2)) out.push(f); return; }
+      if (!cums.has(i)) cums.set(i, U.cum(L.coords));
+      const c = cums.get(i), len = c[c.length - 1] || 1, first = Math.max(0, L.coords.indexOf(cs[0]));
+      let run = null;
+      for (let k = 0; k < cs.length - 1; k++) {
+        const q = Math.min(first + k, c.length - 2);
+        if (see(a + (c[q] + c[q + 1]) / 2 / len * (b - a))) {
+          if (!run) { run = [cs[k]]; out.push({ ...f, geometry: { type: 'LineString', coordinates: run } }); }
+          run.push(cs[k + 1]);
+        } else run = null;
+      }
+    });
+    return out;
+  }
+
   // Éclaircit (plat) ou fonce (raide) une couleur
   const SHADE = [0.55, 0.28, 0, -0.3, -0.52];
   const shadeCache = new Map();
@@ -380,9 +401,10 @@
     sum.alerts.sort((x, y) => (x.lvl === y.lvl ? x.d - y.d : x.lvl === 'warn' ? -1 : 1));
     setAccent(accent());
     document.querySelectorAll('.modes [data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === s.mode)));
-    M.setLegs(legFeatures(s));
-    M.syncMarkers(s.waypoints);
-    M.setAlerts(sum.alerts.map(a => {
+    const see = T.days ? T.days.visibility(s, comb) : null;   // jours masqués sur la carte
+    M.setLegs(see ? clipFeatures(legFeatures(s), s, comb, see) : legFeatures(s));
+    M.syncMarkers(s.waypoints, see && (i => see(i === s.waypoints.length - 1 ? comb.total : comb.starts[i] ?? 0)));
+    M.setAlerts(sum.alerts.filter(a => !see || see(a.d)).map(a => {
       const c = U.at(comb.coords, comb.cum, a.d);
       return c ? { type: 'Feature', geometry: { type: 'Point', coordinates: c }, properties: { text: a.text, lvl: a.lvl } } : null;
     }).filter(Boolean));

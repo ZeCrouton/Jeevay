@@ -163,7 +163,8 @@ T.map = (() => {
     flush();
   }
 
-  function syncMarkers(wps) {
+  // visible(i) (facultatif) : faux pour masquer le point i (jour non affiché)
+  function syncMarkers(wps, visible) {
     const ids = new Set(wps.map(w => w.id));
     for (const [id, m] of markers) if (!ids.has(id)) { m.remove(); markers.delete(id); }
     const n = wps.length;
@@ -184,6 +185,7 @@ T.map = (() => {
         el.addEventListener('click', ev => { ev.stopPropagation(); if (!el.dataset.drag) h.wpClick(el.dataset.id); });
         markers.set(w.id, m);
       }
+      m.getElement().style.display = visible && !visible(i) ? 'none' : '';
       const el = m.getElement().firstChild;
       const kind = n === 1 ? 'start' : i === 0 ? 'start' : i === n - 1 ? 'end' : 'mid';
       const gap = w.gap && kind === 'mid';
